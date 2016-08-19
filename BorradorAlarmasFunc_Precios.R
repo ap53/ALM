@@ -1,4 +1,4 @@
-### Funciones para BorradorAlarmas.R  v0.91
+### Funciones para BorradorAlarmas.R  v0.93
 
 noExposureID <- c("Cash and Banks",
                   "Accounts Payable",
@@ -23,6 +23,36 @@ librerias_base <- function(){
   suppressPackageStartupMessages(library(stringi))
   # suppressPackageStartupMessages(library(readr))
   suppressPackageStartupMessages(library(lazyeval))
+}
+
+# improved list of objects
+.ls.objects <- function (env = .GlobalEnv, pattern, order.by,
+                         decreasing=FALSE, head=FALSE, n=5) {
+  napply <- function(names, fn) sapply(names, function(x)
+    fn(get(x, env = env)))
+  names <- ls(env = env, pattern = pattern)
+  obj.class <- napply(names, function(x) as.character(class(x))[1])
+  obj.mode <- napply(names, mode)
+  obj.type <- ifelse(is.na(obj.class), obj.mode, obj.class)
+  obj.prettysize <- napply(names, function(x) {
+    capture.output(print(object.size(x), units = "auto")) })
+  obj.size <- napply(names, object.size)
+  obj.dim <- t(napply(names, function(x)
+    as.numeric(dim(x))[1:2]))
+  vec <- is.na(obj.dim)[, 1] & (obj.type != "function")
+  obj.dim[vec, 1] <- napply(names, length)[vec]
+  out <- data.frame(obj.type, obj.size, obj.prettysize, obj.dim)
+  names(out) <- c("Type", "Size", "PrettySize", "Rows", "Columns")
+  if (!missing(order.by))
+    out <- out[order(out[[order.by]], decreasing=decreasing), ]
+  if (head)
+    out <- head(out, n)
+  out
+}
+
+# shorthand
+lsos <- function(..., n=20) {
+  .ls.objects(..., order.by="Size", decreasing=TRUE, head=TRUE, n=n)
 }
 
 corrida_alarmas <- function(filename, fecha_inicial = NULL, fecha_final = fecha_inicial){
@@ -396,24 +426,6 @@ generar_objetos_X <- function(X, datos_local, flias){
   
   return(datos_local)
 }
-
-# names(pnl)
-# pnl %>% 
-#   filter(NombreFamilia == 'VIX') %>% 
-#   select(Fecha, 
-#          one_of(c('NombreFamilia', 'PatFamilia', 'RentDiaria', 
-#                   'Suscripciones', 'Rescates', 'PorcRentDiaria', 
-#                   'PorcRentAcumFamilia', 'nav', 'PatFamiliaFinal', 'Exposicion', 
-#                   'Margen_Cuentas', 'Patrimonio_Bulk', 'Resultado_Bulk', 'Margen_Assets', 
-#                   'Max_Expo_Activo', 'Asset_Over_Pat', 'Bonds_Expo', 'Resultado_5_Dias', 
-#                   'Margen_Over_Equity_Ratio', 'Leverage_Ratio', 'Dif_Margenes_Ratio')
-#          )) %>% tbl_df
-# 
-# pnl %>% 
-#   filter(NombreFamilia == 'VIX') %>% 
-#   select(-c(NombreFamilia, PorcRentAcumFamilia)) %>% tbl_df
-
-
 
 generar_exposure <- function(datos_local, flias){
   nombre_serie <- 'Exposure'
