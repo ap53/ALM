@@ -1,4 +1,4 @@
-### Funciones para BorradorAlarmas.R  v0.92
+### Funciones para BorradorAlarmas.R  v0.91
 
 noExposureID <- c("Cash and Banks",
                   "Accounts Payable",
@@ -23,36 +23,6 @@ librerias_base <- function(){
   suppressPackageStartupMessages(library(stringi))
   # suppressPackageStartupMessages(library(readr))
   suppressPackageStartupMessages(library(lazyeval))
-}
-
-# improved list of objects
-.ls.objects <- function (env = .GlobalEnv, pattern, order.by,
-                         decreasing=FALSE, head=FALSE, n=5) {
-  napply <- function(names, fn) sapply(names, function(x)
-    fn(get(x, env = env)))
-  names <- ls(env = env, pattern = pattern)
-  obj.class <- napply(names, function(x) as.character(class(x))[1])
-  obj.mode <- napply(names, mode)
-  obj.type <- ifelse(is.na(obj.class), obj.mode, obj.class)
-  obj.prettysize <- napply(names, function(x) {
-    capture.output(print(object.size(x), units = "auto")) })
-  obj.size <- napply(names, object.size)
-  obj.dim <- t(napply(names, function(x)
-    as.numeric(dim(x))[1:2]))
-  vec <- is.na(obj.dim)[, 1] & (obj.type != "function")
-  obj.dim[vec, 1] <- napply(names, length)[vec]
-  out <- data.frame(obj.type, obj.size, obj.prettysize, obj.dim)
-  names(out) <- c("Type", "Size", "PrettySize", "Rows", "Columns")
-  if (!missing(order.by))
-    out <- out[order(out[[order.by]], decreasing=decreasing), ]
-  if (head)
-    out <- head(out, n)
-  out
-}
-
-# shorthand
-lsos <- function(..., n=20) {
-  .ls.objects(..., order.by="Size", decreasing=TRUE, head=TRUE, n=n)
 }
 
 corrida_alarmas <- function(filename, fecha_inicial = NULL, fecha_final = fecha_inicial){
@@ -410,8 +380,8 @@ generar_objetos_pnl <- function(datos_local, flias){
 
 generar_objetos_X <- function(X, datos_local, flias){
   # Could do it in one step...
-  if("Familia" %in% names(X)) X$Familia <- NULL
-  if("PorcRentAcumFamilia" %in% names(X)) X$PorcRentAcumFamilia <- NULL
+  if("Familia" %in% names(X)) serie$Familia <- NULL
+  if("PorcRentAcumFamilia" %in% names(X)) serie$PorcRentAcumFamilia <- NULL
   
   serie <- X %>% tbl_df
   
@@ -427,21 +397,21 @@ generar_objetos_X <- function(X, datos_local, flias){
   return(datos_local)
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# names(pnl)
+# pnl %>% 
+#   filter(NombreFamilia == 'VIX') %>% 
+#   select(Fecha, 
+#          one_of(c('NombreFamilia', 'PatFamilia', 'RentDiaria', 
+#                   'Suscripciones', 'Rescates', 'PorcRentDiaria', 
+#                   'PorcRentAcumFamilia', 'nav', 'PatFamiliaFinal', 'Exposicion', 
+#                   'Margen_Cuentas', 'Patrimonio_Bulk', 'Resultado_Bulk', 'Margen_Assets', 
+#                   'Max_Expo_Activo', 'Asset_Over_Pat', 'Bonds_Expo', 'Resultado_5_Dias', 
+#                   'Margen_Over_Equity_Ratio', 'Leverage_Ratio', 'Dif_Margenes_Ratio')
+#          )) %>% tbl_df
+# 
+# pnl %>% 
+#   filter(NombreFamilia == 'VIX') %>% 
+#   select(-c(NombreFamilia, PorcRentAcumFamilia)) %>% tbl_df
 
 
 
@@ -649,7 +619,7 @@ correr_alarma <- function(expr, importancia = 5, flias_1, flias_2 = flias_1,
   # Retoque de campos para JIRA (emprolijar)
   if (is.na(res$alarma)) {
     res$alarma <- TRUE
-    if (is.null(res$es_pnl)) {
+    if (is.null(res$es_pnl) || is.na(res$es_pnl)) {
       res$importancia <- importancia
     } else {
       # On 'lack of data' errors, pnl is serious, other cases not so serious...
@@ -871,7 +841,13 @@ terminoYY <- function(serie, duracion = 0, start = NULL, post_proceso = c('perce
   if (is.null(start)) start <- ifelse(un_solo_dia, 0, 1)
   end <- start + duracion - ifelse(un_solo_dia, 0, 1)
   
-  fecha_start <- (dias %>% filter(IxDia == start) %>% select(date))[[1]]
+  # fecha_start <- (dias %>% filter(IxDia == start) %>% select(date))[[1]]
+  IxBase <- (dias %>% filter(date == fecha_base) %>% select(IxDia))[[1]]
+  if (start == 0) {
+    fecha_start <- fecha_base
+  } else {
+    fecha_start <- (dias %>% filter(IxDia == IxBase + start) %>% select(date))[[1]]
+  }
   dato_uno <- datos_uno[datos_uno$date == fecha_start, serie]
   
   if (nrow(dato_uno) == 0 || is.na(dato_uno[1, serie])) {
@@ -882,10 +858,12 @@ terminoYY <- function(serie, duracion = 0, start = NULL, post_proceso = c('perce
     return(dato_uno)
   } else {
     # Es un periodo, subseteo la serie y devuelvo el percentil pedido
-    serie <- datos_uno[datos_uno$IxDia >= start & 
-                         datos_uno$IxDia <= end, serie][[1]]
-    # serie <- DATOS[DATOS$IxDia >= (start + ixBase) & DATOS$IxDia <= (end + ixBase), nombre_serie][[1]]
+    # serie <- datos_uno[datos_uno$IxDia >= start & 
+    #                      datos_uno$IxDia <= end, serie][[1]]
+    fecha_end <- (dias %>% filter(IxDia == IxBase + end) %>% select(date))[[1]]
     
+    serie <- datos_uno[datos_uno$date <= fecha_start & 
+                         datos_uno$date >= fecha_end, serie][[1]]
     if(devolver_serie) {
       return(serie)
     } else {
