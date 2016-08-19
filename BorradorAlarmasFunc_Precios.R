@@ -1,4 +1,4 @@
-### Funciones para BorradorAlarmas.R  v0.91
+### Funciones para BorradorAlarmas.R  v0.92
 
 noExposureID <- c("Cash and Banks",
                   "Accounts Payable",
