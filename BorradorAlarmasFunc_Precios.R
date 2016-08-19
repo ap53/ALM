@@ -410,8 +410,8 @@ generar_objetos_pnl <- function(datos_local, flias){
 
 generar_objetos_X <- function(X, datos_local, flias){
   # Could do it in one step...
-  if("Familia" %in% names(X)) serie$Familia <- NULL
-  if("PorcRentAcumFamilia" %in% names(X)) serie$PorcRentAcumFamilia <- NULL
+  if("Familia" %in% names(X)) X$Familia <- NULL
+  if("PorcRentAcumFamilia" %in% names(X)) X$PorcRentAcumFamilia <- NULL
   
   serie <- X %>% tbl_df
   
