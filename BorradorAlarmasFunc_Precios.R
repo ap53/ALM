@@ -502,7 +502,9 @@ leer_yaml <- function(archivo){
 
 correr_alarma <- function(expr, importancia = 5, flias_1, flias_2 = flias_1, 
                           flias_3 = flias_1, flias_4 = flias_2, tipo = '', 
-                          mensaje_corto = '', mensaje = ''){
+                          mensaje_corto = '', mensaje = '', 
+                          # parametros usados cuando se llama desde la funcion 'crossover'
+                          permanente = FALSE, paso_crossover = 0){
   
   tipo <- str_replace_all(tipo, ',', ' ')
   mensaje_corto <- str_replace_all(mensaje_corto, ',', ' ')
@@ -660,8 +662,12 @@ correr_alarma <- function(expr, importancia = 5, flias_1, flias_2 = flias_1,
   
   # rm(familia_target_, envir=globalenv())
   
-  salida_pantalla <- preparar_output(res, archivo_salida, silencioso = FALSE)
-  cat(salida_pantalla, '\n\n')
+  if (paso_crossover == 0) { # correr_alarma fue llamada directamente
+    salida_pantalla <- preparar_output(res, archivo_salida, silencioso = FALSE)
+    cat(salida_pantalla, '\n\n')
+  } else { # correr_alarma fue llamada a través de crossover
+    return(res)
+  }
 }
 
 
@@ -669,13 +675,9 @@ correr_alarma <- function(expr, importancia = 5, flias_1, flias_2 = flias_1,
 c_a <- correr_alarma
 
 crossover <- function(...){
-  chk_hoy <- correr_alarma(expr = expr, importancia = importancia, flias_1, flias_2 = flias_1, 
-                flias_3 = flias_1, flias_4 = flias_2, tipo = '', 
-                mensaje_corto = '', mensaje = '', paso_crossover = 1)
+  chk_hoy <- correr_alarma(..., paso_crossover = 1)
   
-  chk_ayer <- correr_alarma(expr = expr, importancia = importancia, flias_1, flias_2 = flias_1, 
-                flias_3 = flias_1, flias_4 = flias_2, tipo = '', 
-                mensaje_corto = '', mensaje = '', paso_crossover = 2)
+  chk_ayer <- correr_alarma(..., paso_crossover = 2)
   
   if (  !chk_hoy$alarma & !chk_ayer$alarma){
     # No se disparó ni ayer ni hoy
