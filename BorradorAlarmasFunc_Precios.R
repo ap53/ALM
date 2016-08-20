@@ -883,7 +883,9 @@ terminoYY <- function(serie, duracion = 0, start = NULL, post_proceso = c('perce
   if (is.null(start)) start <- ifelse(un_solo_dia, 0, 1)
   
   # Si estoy en el segundo paso de un crossover(), tengo que mirar el día anterior
-  if (paso_crossover == 2) start <- start + 1
+  if (paso_crossover == 2) {
+    start <- start + 1
+  }
   
   end <- start + duracion - ifelse(un_solo_dia, 0, 1)
   
