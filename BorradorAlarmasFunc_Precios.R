@@ -668,6 +668,34 @@ correr_alarma <- function(expr, importancia = 5, flias_1, flias_2 = flias_1,
 # Shorter call!
 c_a <- correr_alarma
 
+crossover <- function(...){
+  chk_hoy <- correr_alarma(expr = expr, importancia = importancia, flias_1, flias_2 = flias_1, 
+                flias_3 = flias_1, flias_4 = flias_2, tipo = '', 
+                mensaje_corto = '', mensaje = '', paso_crossover = 1)
+  
+  chk_ayer <- correr_alarma(expr = expr, importancia = importancia, flias_1, flias_2 = flias_1, 
+                flias_3 = flias_1, flias_4 = flias_2, tipo = '', 
+                mensaje_corto = '', mensaje = '', paso_crossover = 2)
+  
+  if (  !chk_hoy$alarma & !chk_ayer$alarma){
+    # No se disparó ni ayer ni hoy
+    
+  } else if (!chk_hoy$alarma &  chk_ayer$alarma){
+    # No se disparó ayer pero hoy sí: hay crossover (+1)
+    
+  } else if ( chk_hoy$alarma & !chk_ayer$alarma){
+    # Se disparó ayer pero hoy no: hay crossover (-1)
+    
+  } else if ( chk_hoy$alarma &  chk_ayer$alarma){
+    # Se disparó ambas veces: no hay crossover, pero si piden 'permanente' lo informo igual
+    if (exists('permanente') && permanente) {
+      
+    } else {
+      # No informo nada
+    }
+  }
+}
+
 evaluar_llave <- function(expr, flias, primer_flia){
   expr_q <- str_sub(expr, 2, str_length(expr) - 1)[[1]]
   
