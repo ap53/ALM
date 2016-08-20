@@ -504,7 +504,7 @@ correr_alarma <- function(expr, importancia = 5, flias_1, flias_2 = flias_1,
                           flias_3 = flias_1, flias_4 = flias_2, tipo = '', 
                           mensaje_corto = '', mensaje = '', 
                           # parametros usados cuando se llama desde la funcion 'crossover'
-                          permanente = FALSE, paso_crossover = 0){
+                          paso_crossover = 0){
   
   tipo <- str_replace_all(tipo, ',', ' ')
   mensaje_corto <- str_replace_all(mensaje_corto, ',', ' ')
@@ -674,7 +674,7 @@ correr_alarma <- function(expr, importancia = 5, flias_1, flias_2 = flias_1,
 # Shorter call!
 c_a <- correr_alarma
 
-crossover <- function(...){
+crossover <- function(..., permanente = FALSE){
   chk_hoy <- correr_alarma(..., paso_crossover = 1)
   
   chk_ayer <- correr_alarma(..., paso_crossover = 2)
