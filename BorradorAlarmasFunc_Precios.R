@@ -679,23 +679,42 @@ crossover <- function(..., permanente = 0){
   
   chk_ayer <- correr_alarma(..., paso_crossover = 2)
   
+  hay_error <- 0
+  if (str_detect(chk_hoy$mensaje_corto, 'ERROR') || str_detect(chk_ayer$mensaje_corto, 'ERROR')) {
+    hay_error <- 1
+  } 
+  
   if (  !chk_hoy$alarma & !chk_ayer$alarma){
-    # No se disparó ni ayer ni hoy
+    # No se disparó ni ayer ni hoy, mando resultados de hoy
+    if (!hay_error) chk_hoy$mensaje_corto <- 'No hay crossover (alarma apagada)'
     
-  } else if (!chk_hoy$alarma &  chk_ayer$alarma){
-    # No se disparó ayer pero hoy sí: hay crossover (+1)
+  } else if (chk_hoy$alarma & !chk_ayer$alarma){
+    # No se disparó ayer pero hoy sí: se prendió la alarma, hay crossover (+1)
+    if (!hay_error) chk_hoy$mensaje_corto <- paste0('Se prendió la alarma: "', chk_hoy$mensaje_corto, '"')
+    chk_hoy$result_parciales <- paste(chk_ayer$result_parciales, '|', chk_hoy$result_parciales)
     
-  } else if ( chk_hoy$alarma & !chk_ayer$alarma){
-    # Se disparó ayer pero hoy no: hay crossover (-1)
+  } else if (!chk_hoy$alarma & chk_ayer$alarma){
+    # Se disparó ayer pero hoy no: se apagó la alarma, hay crossover (-1)
+    # Apago la alarma y aviso que no hay crossover
+    if (!hay_error) {
+      chk_hoy$alarma <- TRUE
+      chk_hoy$importancia <- chk_ayer$importancia
+      chk_hoy$mensaje_corto <- paste0('Se apagó la alarma: "', chk_ayer$mensaje_corto, '"')
+    }
+    chk_hoy$result_parciales <- paste(chk_ayer$result_parciales, '|', chk_hoy$result_parciales)
     
   } else if ( chk_hoy$alarma &  chk_ayer$alarma){
     # Se disparó ambas veces: no hay crossover, pero si piden 'permanente' lo informo igual
-    if (permanente) {
-      
-    } else {
-      # No informo nada
+    if (!permanente && !hay_error) {
+      # Apago la alarma
+      chk_hoy$alarma <- FALSE
+      chk_hoy$importancia <- 0
     }
+    if (!hay_error) chk_hoy$mensaje_corto <- paste0(chk_hoy$mensaje_corto, ', pero no es crossover.')
   }
+  
+  salida_pantalla <- preparar_output(chk_hoy, archivo_salida)
+  cat(salida_pantalla, '\n\n')
 }
 
 evaluar_llave <- function(expr, flias, primer_flia){
@@ -883,7 +902,7 @@ terminoYY <- function(serie, duracion = 0, start = NULL, post_proceso = c('perce
   if (is.null(start)) start <- ifelse(un_solo_dia, 0, 1)
   
   # Si estoy en el segundo paso de un crossover(), tengo que mirar el día anterior
-  if (paso_crossover == 2) {
+  if (get('paso_crossover', parent.frame(2)) == 2) {
     start <- start + 1
   }
   
