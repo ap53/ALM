@@ -921,41 +921,52 @@ terminoYY <- function(serie, duracion = 0, start = NULL, post_proceso = c('perce
   } else {
     fecha_start <- (dias %>% filter(IxDia == IxBase + start) %>% select(date))[[1]]
   }
+  fecha_end <- (dias %>% filter(IxDia == IxBase + end) %>% select(date))[[1]]
+  
   dato_uno <- datos_uno[datos_uno$date == fecha_start, serie]
+  v_serie <- datos_uno[datos_uno$date <= fecha_start & 
+                         datos_uno$date >= fecha_end, serie][[1]]
   
   if (nrow(dato_uno) == 0 || is.na(dato_uno[1, serie])) {
-    stop('Faltan datos para ', ticker_, ' (start)', call. = FALSE)
+    if (post_proceso =='ultimo') {
+      dato_uno <- v_serie[1]
+    } else if (post_proceso == 'primero') {
+      dato_uno <- v_serie[length(v_serie)]
+    } else {
+      stop('Faltan datos para ', ticker_, ' (start)', call. = FALSE)
+    }
+    if (is.na(dato_uno)) dato_uno <- ND
+    names(dato_uno) <- serie
   }
   
   if (un_solo_dia) {
     return(dato_uno)
   } else {
-    # Es un periodo, subseteo la serie y devuelvo el percentil pedido
-    # serie <- datos_uno[datos_uno$IxDia >= start & 
-    #                      datos_uno$IxDia <= end, serie][[1]]
-    fecha_end <- (dias %>% filter(IxDia == IxBase + end) %>% select(date))[[1]]
+    # Es un periodo, subseteo la v_serie y devuelvo el percentil pedido
     
-    serie <- datos_uno[datos_uno$date <= fecha_start & 
-                         datos_uno$date >= fecha_end, serie][[1]]
     if(devolver_serie) {
-      return(serie)
+      return(v_serie)
     } else {
       if (post_proceso == 'percentil') {
-        return(quantile(serie, p))
+        return(quantile(v_serie, p))
       } else if (post_proceso == 'media') {
-        return(mean(serie))
+        return(mean(v_serie))
       } else if (post_proceso == 'suma'){ 
-        return(sum(serie))
+        return(sum(v_serie))
       } else if (post_proceso == 'max'){ 
-        return(max(serie))
+        return(max(v_serie))
       } else if (post_proceso == 'min'){ 
-        return(min(serie))
+        return(min(v_serie))
       } else if (post_proceso == 'signo_suma'){ 
-        return(sign(sum(serie)))
+        return(sign(sum(v_serie)))
       } else if (post_proceso == '%pos') {
-        return(sum(serie > 0) / length(serie))
+        return(sum(v_serie > 0) / length(v_serie))
       } else if (post_proceso == '%neg') {
-        return(sum(serie < 0) / length(serie))
+        return(sum(v_serie < 0) / length(v_serie))
+      } else if (post_proceso == 'ultimo') {
+        return(dato_uno)
+      } else if (post_proceso == 'primero') {
+        return(dato_uno)
       } else
         return(99999999.9)
     }
