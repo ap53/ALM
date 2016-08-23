@@ -1384,8 +1384,19 @@ init_alarm_env <- function(){
     msg <- paste('Alarmas corrida:', sum(alarm_env$cant_alarmas), 
                  '[', paste(alarm_env$cant_alarmas, collapse = ', '), ']')
   }
+
+  if (exists('datos_long')) {
+    # This is the "correct" value for max_fecha_datos
+    # Normally I wouldn't need to set it here, as cargar_datos() will set it after this...
+    # But I sometimes re_source the code without re-running cargar_datos()...
+    alarm_env$max_fecha_datos <- (datos_long %>% filter(source == 'pnl') %>%
+                                     summarize(max(date)))[[1]]
+  } else {
+    # In this case, just a place holder. (¿Needed?)
+    alarm_env$max_fecha_datos <- Sys.Date()
+  }
   
-  alarm_env$max_fecha_datos <- Sys.Date()
+  fecha_base <<- alarm_env$max_fecha_datos
   
   return(alarm_env)
 }
