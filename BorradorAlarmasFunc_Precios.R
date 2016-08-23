@@ -588,8 +588,8 @@ correr_alarma <- function(expr, importancia = 5, flias_1, flias_2 = flias_1,
       
       valor[[1]] <- ifelse(is.nan(valor[[1]]), NA_real_, valor[[1]])
       
-      valor <- ifelse(abs(valor) < 1, 
-                      round(valor, 3), 
+      valor <- ifelse(abs(valor) < 2, 
+                      round(valor, 5), 
                       ifelse(abs(valor) < 1000, 
                              round(valor, 2), 
                              round(valor, 0)))
