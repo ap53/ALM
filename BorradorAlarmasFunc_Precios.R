@@ -588,8 +588,8 @@ correr_alarma <- function(expr, importancia = 5, flias_1, flias_2 = flias_1,
       
       valor[[1]] <- ifelse(is.nan(valor[[1]]), NA_real_, valor[[1]])
       
-      valor <- ifelse(abs(valor) < 1, 
-                      round(valor, 3), 
+      valor <- ifelse(abs(valor) < 2, 
+                      round(valor, 5), 
                       ifelse(abs(valor) < 1000, 
                              round(valor, 2), 
                              round(valor, 0)))
@@ -606,8 +606,8 @@ correr_alarma <- function(expr, importancia = 5, flias_1, flias_2 = flias_1,
     simbolo_comparacion <- str_extract(expr_q, ' *(>[=]?|==|!=|<[=]?) *')
     result_parciales <- sapply(X = terminos_parciales, FUN = function(y) eval(parse(text = y)))
     
-    result_parciales <- ifelse(abs(result_parciales) < 1, 
-                               round(result_parciales, 3), 
+    result_parciales <- ifelse(abs(result_parciales) < 2, 
+                               round(result_parciales, 5), 
                                ifelse(abs(result_parciales) < 1000, 
                                       round(result_parciales, 2), 
                                       round(result_parciales, 0)))
