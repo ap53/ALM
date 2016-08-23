@@ -705,12 +705,15 @@ crossover <- function(..., permanente = 0){
     
   } else if ( chk_hoy$alarma &  chk_ayer$alarma){
     # Se disparó ambas veces: no hay crossover, pero si piden 'permanente' lo informo igual
-    if (!permanente && !hay_error) {
-      # Apago la alarma
-      chk_hoy$alarma <- FALSE
-      chk_hoy$importancia <- 0
+    if (!hay_error) {
+      chk_hoy$mensaje_corto <- paste0(chk_hoy$mensaje_corto, ': no es crossover')
+      if (!permanente) {
+        # Apago la alarma
+        chk_hoy$alarma <- FALSE
+        chk_hoy$importancia <- 0
+        chk_hoy$mensaje_corto <- paste0(chk_hoy$mensaje_corto, ': no se disparó.')
+      }
     }
-    if (!hay_error) chk_hoy$mensaje_corto <- paste0(chk_hoy$mensaje_corto, ', pero no es crossover.')
   }
   
   salida_pantalla <- preparar_output(chk_hoy, archivo_salida)
@@ -825,6 +828,8 @@ evaluar_termino <- function(f, familia_target){
     err$message <- paste0(err$message, '//', origen_termino)
     err
   })
+  a <- 1
+  arg
 }
 
 armar_lista_args <- function(...){
