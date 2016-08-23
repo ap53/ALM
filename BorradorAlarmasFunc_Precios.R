@@ -700,6 +700,7 @@ crossover <- function(..., permanente = 0){
       chk_hoy$alarma <- TRUE
       chk_hoy$importancia <- chk_ayer$importancia
       chk_hoy$mensaje_corto <- paste0('Se apagó la alarma: "', chk_ayer$mensaje_corto, '"')
+      chk_hoy$mensaje <- paste0('Se apagó la alarma: "', chk_ayer$mensaje, '"')
     }
     chk_hoy$result_parciales <- paste(chk_ayer$result_parciales, '|', chk_hoy$result_parciales)
     
@@ -828,8 +829,8 @@ evaluar_termino <- function(f, familia_target){
     err$message <- paste0(err$message, '//', origen_termino)
     err
   })
-  a <- 1
-  arg
+  a <- 1  # Estas dos últimas líneas son para debugging, para poder poner un breakpoint
+  arg     # confiable dentro de esta rutina. Más adelante se pueden sacar ambas...
 }
 
 armar_lista_args <- function(...){
