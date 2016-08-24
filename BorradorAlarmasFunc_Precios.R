@@ -875,7 +875,7 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
     }
   } 
   
-  if ( (datos_uno %>% select(date) %>% slice(1L))[[1]] < fecha_base) {
+  if ( (datos_uno %>% select(date) %>% slice(1L))[[1]] < fecha_start) {
     if (un_solo_dia) {
       if (post_proceso %in% c('ultimo', 'primero')) {
         return(ND)
