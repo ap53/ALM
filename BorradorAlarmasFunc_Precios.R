@@ -820,11 +820,7 @@ evaluar_termino <- function(f, familia_target){
   lista_argumentos <- c(quote(term), lista_argumentos)
   
   arg <- tryCatch({
-    if (exists('usarYY') && usarYY) {
-      do.call(terminoYY, lista_argumentos)
-    } else {
-      do.call(terminoXX, lista_argumentos)
-    }
+    do.call(calcular_termino, lista_argumentos)
   }, error = function(err) {
     err$message <- paste0(err$message, '//', origen_termino)
     err
@@ -837,53 +833,11 @@ armar_lista_args <- function(...){
   list(...)
 }
 
-terminoXX <- function(serie, duracion = 0, start = NULL, post_proceso = c('percentil'), 
-                      p = NULL, devolver_serie = FALSE){
-  ixBase <- (DATOS %>% filter(Fecha == fecha_base) %>% select(IxDia))[[1]]
-  nombre_serie <- paste(serie, get('familia_target', envir = parent.frame()))
-  
-  un_solo_dia <- (duracion == 0) || (is.null(duracion))
-  if (is.null(start)) start <- ifelse(un_solo_dia, 0, 1)
-  end <- start + duracion - ifelse(un_solo_dia, 0, 1)
-  
-  if (un_solo_dia) {
-    # Devuelvo un único valor, y no tiene sentido evaluar percentiles
-    return(DATOS[DATOS$IxDia == start + ixBase, nombre_serie])
-  } else {
-    # Es un periodo, subseteo la serie y devuelvo el percentil pedido
-    serie <- DATOS[DATOS$IxDia >= (start + ixBase) & DATOS$IxDia <= (end + ixBase), nombre_serie][[1]]
-    
-    if(devolver_serie) {
-      return(serie)
-    } else {
-      if (post_proceso == 'percentil') {
-        return(quantile(serie, p))
-      } else if (post_proceso == 'media') {
-        return(mean(serie))
-      } else if (post_proceso == 'suma'){ 
-        return(sum(serie))
-      } else if (post_proceso == 'max'){ 
-        return(max(serie))
-      } else if (post_proceso == 'min'){ 
-        return(min(serie))
-      } else if (post_proceso == 'signo_suma'){ 
-        return(sign(sum(serie)))
-      } else if (post_proceso == '%pos') {
-        return(sum(serie > 0) / length(serie))
-      } else if (post_proceso == '%neg') {
-        return(sum(serie < 0) / length(serie))
-      } else
-        return(99999999.9)
-    }
-  }
-}
-
-terminoYY <- function(serie, duracion = 0, start = NULL, post_proceso = c('percentil'), 
-                      p = NULL, devolver_serie = FALSE){
+calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c('percentil'), 
+                      p = NULL, ver_serie = FALSE){
   
   # browser()  #####################################################
   
-  # ixBase <- (DATOS %>% filter(Fecha == fecha_base) %>% select(IxDia))[[1]]
   ticker_ <- get('familia_target', envir = parent.frame())
   
   # serie_ <- lazyeval::as.lazy(serie) 
@@ -891,144 +845,97 @@ terminoYY <- function(serie, duracion = 0, start = NULL, post_proceso = c('perce
   if (str_detect(serie, '_Ovr_')) {
     ticker_ <- paste(ticker_, '|', ticker_)
   }
-  
-  datos_uno <- datos_long %>% filter(ticker == ticker_, variable == serie) %>% 
-    filter(date <= fecha_base)
-  
-  if (nrow(datos_uno) == 0) stop(paste('Faltan datos para', ticker_), call. = FALSE)
-  
-  datos_uno <- datos_uno %>% 
-    spread(variable, value, fill = NA) %>% 
-    arrange(desc(date)) %>% 
-    mutate(IxDia = row_number() - 1) %>% tbl_df
-  
-  nombre_serie <- paste(serie, ticker_)
-  
-  un_solo_dia <- (duracion == 0) || (is.null(duracion))
-  if (is.null(start)) start <- ifelse(un_solo_dia, 0, 1)
   
   # Si estoy en el segundo paso de un crossover(), tengo que mirar el día anterior
-  if (get('paso_crossover', parent.frame(2)) == 2) {
-    start <- start + 1
+  xovr_slide <- ifelse(get('paso_crossover', parent.frame(2)) == 2, 1, 0)
+  
+  un_solo_dia <- (duracion == 0)
+  if (is.null(start)) start <- ifelse(un_solo_dia, 0, 1) + xovr_slide
+  
+  fecha_start <- (dias %>% filter(IxDia == start) %>% select(date))[[1]]
+  
+  datos_uno <- datos_long %>% filter(ticker == ticker_, variable == serie) %>% 
+    filter(date <= fecha_start) %>% 
+    spread(variable, value, fill = NA) %>% 
+    filter(complete.cases(.)) %>% 
+    arrange(desc(date)) %>% 
+    slice(1:duracion) %>% 
+    tbl_df
+  
+  if(ver_serie) {
+    # This is just for debugging
+    print(datos_uno, n = nrow(datos_uno))
   }
   
-  end <- start + duracion - ifelse(un_solo_dia, 0, 1)
-  
-  # fecha_start <- (dias %>% filter(IxDia == start) %>% select(date))[[1]]
-  IxBase <- (dias %>% filter(date == fecha_base) %>% select(IxDia))[[1]]
-  if (start == 0) {
-    fecha_start <- fecha_base
-  } else {
-    fecha_start <- (dias %>% filter(IxDia == IxBase + start) %>% select(date))[[1]]
-  }
-  dato_uno <- datos_uno[datos_uno$date == fecha_start, serie]
-  
-  if (nrow(dato_uno) == 0 || is.na(dato_uno[1, serie])) {
-    stop('Faltan datos para ', ticker_, ' (start)', call. = FALSE)
-  }
-  
-  if (un_solo_dia) {
-    return(dato_uno)
-  } else {
-    # Es un periodo, subseteo la serie y devuelvo el percentil pedido
-    # serie <- datos_uno[datos_uno$IxDia >= start & 
-    #                      datos_uno$IxDia <= end, serie][[1]]
-    fecha_end <- (dias %>% filter(IxDia == IxBase + end) %>% select(date))[[1]]
-    
-    serie <- datos_uno[datos_uno$date <= fecha_start & 
-                         datos_uno$date >= fecha_end, serie][[1]]
-    if(devolver_serie) {
-      return(serie)
+  if (nrow(datos_uno) == 0) {
+    if (post_proceso %in% c('ultimo', 'primero')) {
+      return(ND)
     } else {
-      if (post_proceso == 'percentil') {
-        return(quantile(serie, p))
-      } else if (post_proceso == 'media') {
-        return(mean(serie))
-      } else if (post_proceso == 'suma'){ 
-        return(sum(serie))
-      } else if (post_proceso == 'max'){ 
-        return(max(serie))
-      } else if (post_proceso == 'min'){ 
-        return(min(serie))
-      } else if (post_proceso == 'signo_suma'){ 
-        return(sign(sum(serie)))
-      } else if (post_proceso == '%pos') {
-        return(sum(serie > 0) / length(serie))
-      } else if (post_proceso == '%neg') {
-        return(sum(serie < 0) / length(serie))
-      } else
-        return(99999999.9)
+      stop('Faltan datos para ', ticker_, '(todos)', call. = FALSE)
+    }
+  } 
+  
+  if ( (datos_uno %>% select(date) %>% slice(1L))[[1]] < fecha_base) {
+    if (un_solo_dia) {
+      if (post_proceso %in% c('ultimo', 'primero')) {
+        return(ND)
+      } else {
+        stop('Faltan datos para ', ticker_, ' (start)', call. = FALSE)
+      }
+    } else {
+      # There are no more NAs, can safely return values
+      if (post_proceso =='ultimo') {
+        return( (datos_uno %>% select(4) %>% slice(1L))[[1]] )
+      } else if (post_proceso == 'primero') {
+        return( (datos_uno %>% select(4) %>% slice(n()))[[1]])
+      } else {
+        stop('Faltan datos para ', ticker_, ' (start)', call. = FALSE)
+      }
+    }
+    
+  }
+  
+  # 'start' records exists
+  if (un_solo_dia) { # Si es un valor puntual, ya lo puedo devolver...
+    resultado <- (datos_uno %>% select(4) %>% slice(1L))[[1]]
+    return( ifelse(is.na(resultado), ND, resultado) )
+    
+  } else if (nrow(datos_uno) < duracion) { # Si es más de un día, me fijo si tengo suficientes
+    if (!post_proceso %in% c('ultimo', 'primero')) {                   # registros...
+      stop('Faltan datos para ', ticker_, '(cantidad)', call. = FALSE)
     }
   }
+
+  # If I got here, it means that:
+  #    1) duracion > 1
+  #    2) Data is OK
+  # Just post-process and return
+  v_serie <- (datos_uno %>% select(4))[[1]]
+  
+  if (post_proceso == 'percentil') {
+    return(quantile(v_serie, p))
+  } else if (post_proceso == 'media') {
+    return(mean(v_serie))
+  } else if (post_proceso == 'suma'){ 
+    return(sum(v_serie))
+  } else if (post_proceso == 'max'){ 
+    return(max(v_serie))
+  } else if (post_proceso == 'min'){ 
+    return(min(v_serie))
+  } else if (post_proceso == 'signo_suma'){ 
+    return(sign(sum(v_serie)))
+  } else if (post_proceso == '%pos') {
+    return(sum(v_serie > 0) / length(v_serie))
+  } else if (post_proceso == '%neg') {
+    return(sum(v_serie < 0) / length(v_serie))
+  } else if (post_proceso == 'ultimo') {
+    return(dato_uno)
+  } else if (post_proceso == 'primero') {
+    return(dato_uno)
+  } else
+    stop('post_proceso: ', ticker_, ' desconocido.', call. = FALSE)
 }
 
-termino_YYY <- function(serie, duracion = 0, start = NULL, post_proceso = c('percentil'), 
-                        p = NULL, devolver_serie = FALSE){
-  
-  # Version que no checkea si hay datos...
-  
-  # ixBase <- (DATOS %>% filter(Fecha == fecha_base) %>% select(IxDia))[[1]]
-  ticker_ <- get('familia_target', envir = parent.frame())
-  
-  # serie_ <- lazyeval::as.lazy(serie) 
-  
-  if (str_detect(serie, '_Ovr_')) {
-    ticker_ <- paste(ticker_, '|', ticker_)
-    datos_uno <- datos_long %>% filter(ticker == ticker_, variable == serie) %>% 
-      filter(date <= fecha_base)
-  } else {
-    datos_uno <- datos_long %>% filter(ticker == ticker_, variable == serie) %>% 
-      filter(date <= fecha_base)
-  }
-  # datos_uno <- datos_long %>% filter_(condition)
-  datos_uno <- datos_uno %>% 
-    spread(variable, value, fill = 0)
-  
-  datos_uno <- datos_uno %>% 
-    arrange(desc(date)) %>% 
-    mutate(IxDia = row_number() - 1) %>% tbl_df
-  
-  
-  nombre_serie <- paste(serie, ticker_)
-  
-  un_solo_dia <- (duracion == 0) || (is.null(duracion))
-  if (is.null(start)) start <- ifelse(un_solo_dia, 0, 1)
-  end <- start + duracion - ifelse(un_solo_dia, 0, 1)
-  
-  if (un_solo_dia) {
-    # Devuelvo un único valor, y no tiene sentido evaluar percentiles
-    return(datos_uno[datos_uno$IxDia == start, serie])
-    # return(DATOS[DATOS$IxDia == start + ixBase, nombre_serie])
-  } else {
-    # Es un periodo, subseteo la serie y devuelvo el percentil pedido
-    serie <- datos_uno[datos_uno$IxDia >= start & 
-                         datos_uno$IxDia <= end, serie][[1]]
-    # serie <- DATOS[DATOS$IxDia >= (start + ixBase) & DATOS$IxDia <= (end + ixBase), nombre_serie][[1]]
-    
-    if(devolver_serie) {
-      return(serie)
-    } else {
-      if (post_proceso == 'percentil') {
-        return(quantile(serie, p))
-      } else if (post_proceso == 'media') {
-        return(mean(serie))
-      } else if (post_proceso == 'suma'){ 
-        return(sum(serie))
-      } else if (post_proceso == 'max'){ 
-        return(max(serie))
-      } else if (post_proceso == 'min'){ 
-        return(min(serie))
-      } else if (post_proceso == 'signo_suma'){ 
-        return(sign(sum(serie)))
-      } else if (post_proceso == '%pos') {
-        return(sum(serie > 0) / length(serie))
-      } else if (post_proceso == '%neg') {
-        return(sum(serie < 0) / length(serie))
-      } else
-        return(99999999.9)
-    }
-  }
-}
 
 
 preparar_output <- function(res, archivo = NULL, silencioso = FALSE) {
