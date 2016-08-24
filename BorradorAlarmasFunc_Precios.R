@@ -885,9 +885,9 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
     } else {
       # There are no more NAs, can safely return values
       if (post_proceso =='ultimo') {
-        return( (datos_uno %>% select(serie) %>% slice(1L))[[1]] )
+        return( (datos_uno %>% select(4) %>% slice(1L))[[1]] )
       } else if (post_proceso == 'primero') {
-        return( (datos_uno %>% select(serie) %>% slice(n()))[[1]])
+        return( (datos_uno %>% select(4) %>% slice(n()))[[1]])
       } else {
         stop('Faltan datos para ', ticker_, ' (start)', call. = FALSE)
       }
@@ -897,7 +897,7 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
   
   # 'start' records exists
   if (un_solo_dia) { # Si es un valor puntual, ya lo puedo devolver...
-    resultado <- (datos_uno %>% select(serie) %>% slice(1L))[[1]]
+    resultado <- (datos_uno %>% select(4) %>% slice(1L))[[1]]
     return( ifelse(is.na(resultado), ND, resultado) )
     
   } else if (nrow(datos_uno) < duracion) { # Si es más de un día, me fijo si tengo suficientes
