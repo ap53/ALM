@@ -733,9 +733,13 @@ evaluar_llave <- function(expr, flias, primer_flia){
   
   if (exists('usarYY') && usarYY) {
     ticker_ <- paste(flias[1], '|', flias[2])
-    subserie_1 <- datos_long %>% filter(ticker == ticker_, variable == nombre_compuesto) 
-    
-    ya_existe <- nrow(subserie_1) > 0
+    if (exists('usarDT') && usarDT) {
+      subserie_1 <- datos_long %>% filter(ticker == ticker_, variable == nombre_compuesto) 
+      ya_existe <- nrow(subserie_1) > 0
+    } else {
+      subserie_1 <- datos_long %>% filter(ticker == ticker_, variable == nombre_compuesto) 
+      ya_existe <- nrow(subserie_1) > 0
+    }
   } else {
     nombre_compuesto_familia <- paste(nombre_compuesto, flias[1], sep = ' ')
     ya_existe <- nombre_compuesto_familia %in% colnames(DATOS)
@@ -769,6 +773,10 @@ evaluar_llave <- function(expr, flias, primer_flia){
         select(-ends_with('.y'))
       
       datos_long <<- rbind(datos_long, serie)
+      if (exists('usarDT') && usarDT) {
+        l <- list(dt, serie)
+        dt <- rbindlist(l, use.names=TRUE)
+      }
       dic_local <- diccionario
       dic_local <- rbind(dic_local, 
                          data_frame(variable = nombre_compuesto, 
@@ -854,14 +862,26 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
   
   fecha_start <- (dias %>% filter(IxDia == start) %>% select(date))[[1]]
   
-  datos_uno <- datos_long %>% filter(ticker == ticker_, variable == serie) %>% 
-    filter(date <= fecha_start) %>% 
-    spread(variable, value, fill = NA) %>% 
-    filter(complete.cases(.)) %>% 
-    arrange(desc(date)) %>% 
-    slice(1:duracion) %>% 
-    tbl_df
-  
+  if (exists('usarDT') && usarDT) {
+    a <- dt[.(serie, ticker_)]
+    if (is.na(a$date)) browser()
+    
+    datos_uno <- dt[.(serie, ticker_)] %>% 
+      filter(date <= fecha_start) %>% 
+      spread(variable, value, fill = NA) %>% 
+      filter(complete.cases(.)) %>% 
+      arrange(desc(date)) %>% 
+      slice(1:duracion) %>% 
+      tbl_df
+  } else {
+    datos_uno <- datos_long %>% filter(ticker == ticker_, variable == serie) %>% 
+      filter(date <= fecha_start) %>% 
+      spread(variable, value, fill = NA) %>% 
+      filter(complete.cases(.)) %>% 
+      arrange(desc(date)) %>% 
+      slice(1:duracion) %>% 
+      tbl_df
+  }
   if(ver_serie) {
     # This is just for debugging
     print(datos_uno, n = nrow(datos_uno))
