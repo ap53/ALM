@@ -682,16 +682,21 @@ crossover <- function(..., permanente = 0){
   hay_error <- 0
   if (str_detect(chk_hoy$mensaje_corto, 'ERROR') || str_detect(chk_ayer$mensaje_corto, 'ERROR')) {
     hay_error <- 1
+    chk_hoy$X <- 1 # Flag que significa: se prendió la alarma
   } 
   
   if (  !chk_hoy$alarma & !chk_ayer$alarma){
     # No se disparó ni ayer ni hoy, mando resultados de hoy
-    if (!hay_error) chk_hoy$mensaje_corto <- 'No hay crossover (alarma apagada)'
+    if (!hay_error) {
+      chk_hoy$mensaje_corto <- 'No hay crossover (alarma apagada)'
+      chk_hoy$X <- -99 # No se va a mandar a ningún lado, pero le pongo algo por las dudas
+    }
     
   } else if (chk_hoy$alarma & !chk_ayer$alarma){
     # No se disparó ayer pero hoy sí: se prendió la alarma, hay crossover (+1)
     if (!hay_error) chk_hoy$mensaje_corto <- paste0('Se prendió la alarma: "', chk_hoy$mensaje_corto, '"')
     chk_hoy$result_parciales <- paste(chk_ayer$result_parciales, '|', chk_hoy$result_parciales)
+    chk_hoy$X <- 1 # Flag que significa: se prendió la alarma  (mando el +1 aunque haya error)
     
   } else if (!chk_hoy$alarma & chk_ayer$alarma){
     # Se disparó ayer pero hoy no: se apagó la alarma, hay crossover (-1)
@@ -701,6 +706,7 @@ crossover <- function(..., permanente = 0){
       chk_hoy$importancia <- chk_ayer$importancia
       chk_hoy$mensaje_corto <- paste0('Se apagó la alarma: "', chk_ayer$mensaje_corto, '"')
       chk_hoy$mensaje <- paste0('Se apagó la alarma: "', chk_ayer$mensaje, '"')
+      chk_hoy$X <- -1 # Flag que significa: se apagó la alarma
     }
     chk_hoy$result_parciales <- paste(chk_ayer$result_parciales, '|', chk_hoy$result_parciales)
     
@@ -713,6 +719,9 @@ crossover <- function(..., permanente = 0){
         chk_hoy$alarma <- FALSE
         chk_hoy$importancia <- 0
         chk_hoy$mensaje_corto <- paste0(chk_hoy$mensaje_corto, ': no se disparó.')
+        chk_hoy$X <- -99 # No se va a mandar a ningún lado, pero le pongo algo por las dudas
+      } else {
+        chk_hoy$X <- 0 # Flag que significa: sigue prendida la alarma
       }
     }
   }
@@ -955,8 +964,7 @@ preparar_output <- function(res, archivo = NULL, silencioso = FALSE) {
     cat(res$id_alarma, file="id_alarmas_file.txt", sep = "\n")
   }
   
-  
-  
+  if (is.null(res$X)) res$X <- NA
   
   s0 <- as.data.frame(res, stringsAsFactors = FALSE) %>% 
     mutate(fecha_corrida = Sys.Date())
@@ -976,7 +984,7 @@ preparar_output <- function(res, archivo = NULL, silencioso = FALSE) {
                           fecha_alarma  = format(fecha_alarma,  '%d/%m/%Y')) %>% 
     select(id_alarma, fecha_corrida, fecha_alarma, nombre, cartera_precio, 
            resumen, importancia, Prioridad, 'Project Key' = proyecto, free_text = mensaje, 
-           'Software indicador de Señal' = result_parciales)
+           'Software indicador de Señal' = result_parciales, X)
   
   s_long <- s0 %>% gather(dato, valor, -c(id_alarma, fecha_alarma, fecha_corrida)) %>% 
     select(id_alarma, fecha_alarma, fecha_corrida, dato, valor) %>% 
