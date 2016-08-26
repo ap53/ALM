@@ -964,7 +964,7 @@ preparar_output <- function(res, archivo = NULL, silencioso = FALSE) {
     cat(res$id_alarma, file="id_alarmas_file.txt", sep = "\n")
   }
   
-  if (is.null(res$X)) res$X <- NA
+  if (is.null(res$X)) res$X <- -99
   
   s0 <- as.data.frame(res, stringsAsFactors = FALSE) %>% 
     mutate(fecha_corrida = Sys.Date())
