@@ -165,13 +165,16 @@ carga_datos <- function(flias, fecha_truncado = NULL){
     group_by(date, ticker, variable) %>% summarise(value = sum(value)) %>% 
     mutate(source = 'bulk') %>% ungroup
   
-  if (exists('usarDT') && usarDT){
-    l <- list(dt, bulk3)
-    dt <- rbindlist(l, use.names=TRUE)
-    
-  } else {
-    datos_long <<- rbind(datos_long, bulk3)
-  }
+  # if (exists('usarDT') && usarDT){
+  browser()
+  l <- list(dt, bulk3)
+  dt <<- rbindlist(l, use.names=TRUE)
+  keycols <- c('ticker', 'variable')
+  setDT(dt, keycols, keep.rownames=FALSE)
+  
+  # } else {
+  datos_long <<- rbind(datos_long, bulk3)
+  # }
   
   #   bulk3 %>% filter(date == fecha_base) %>% arrange(variable, ticker, date)
   #   DATOS %>% filter(Fecha == fecha_base) %>% select(starts_with('Cantidad BRE'))
@@ -193,8 +196,7 @@ carga_datos <- function(flias, fecha_truncado = NULL){
   
   diccionario <<- armar_diccionario()
   
-  DATOS <<- df
-  return(dt)
+  return(df)
 }
 
 truncar_fechas_recientes <- function(fecha_truncado){
@@ -498,7 +500,7 @@ generar_resultado <- function(datos_local, flias){
 # DICO CHANGE
 armar_diccionario <- function() {
   if (exists('usarDT') && usarDT) {
-    dt %>% 
+    dt %>% as_data_frame() %>% 
       select(variable, source) %>% unique %>% 
       arrange(source, variable)
   } else {
@@ -763,7 +765,7 @@ evaluar_llave <- function(expr, flias, primer_flia){
   if (exists('usarYY') && usarYY) {
     ticker_ <- paste(flias[1], '|', flias[2])
     if (exists('usarDT') && usarDT) {
-      subserie_1 <- dt[.(nombre_compuesto, ticker_)] 
+      subserie_1 <- dt[.(ticker_, nombre_compuesto)] 
       ya_existe <- nrow(subserie_1) > 0
     } else {
       subserie_1 <- datos_long %>% filter(ticker == ticker_, variable == nombre_compuesto) 
@@ -782,7 +784,7 @@ evaluar_llave <- function(expr, flias, primer_flia){
       nombre_1 <- paste(llamada_1, flias[1], sep = ' ')
       ticker_ <- flias[1]
       if (exists('usarDT') && usarDT) {
-        subserie_1 <- dt[.(llamada_1, ticker_)] 
+        subserie_1 <- dt[.(ticker_, llamada_1)] 
       } else {
         subserie_1 <- datos_long %>% filter(ticker == ticker_, variable == llamada_1) 
       }
@@ -794,7 +796,7 @@ evaluar_llave <- function(expr, flias, primer_flia){
       nombre_2 <- paste(llamada_2, flias[1], sep = ' ')
       ticker_ <- flias[2]
       if (exists('usarDT') && usarDT) {
-        subserie_2 <- dt[.(llamada_2, ticker_)] 
+        subserie_2 <- dt[.(ticker_, llamada_2)] 
       } else {
         subserie_2 <- datos_long %>% filter(ticker == ticker_, variable == llamada_2) 
       }
@@ -809,12 +811,15 @@ evaluar_llave <- function(expr, flias, primer_flia){
                source = paste('local', source_1)) %>% 
         select(-ends_with('.y'))
       
-      if (exists('usarDT') && usarDT) {
+      # if (exists('usarDT') && usarDT) {
         l <- list(dt, serie)
         dt <<- rbindlist(l, use.names=TRUE)
-      } else {
+        keycols <- c('ticker', 'variable')
+        setDT(dt, keycols, keep.rownames=FALSE)
+        
+      # } else {
         datos_long <<- rbind(datos_long, serie)
-      }
+      # }
       
       dic_local <- diccionario
       dic_local <- rbind(dic_local, 
@@ -902,10 +907,10 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
   fecha_start <- (dias %>% filter(IxDia == start) %>% select(date))[[1]]
   
   if (exists('usarDT') && usarDT) {
-    a <- dt[.(serie, ticker_)]
-    if (is.na(a$date)) browser()
+    a <- dt[.(ticker_, serie)]
+    if (is.na((a$date)[[1]])) browser()
     
-    datos_uno <- dt[.(serie, ticker_)] %>% 
+    datos_uno <- dt[.(ticker_, serie)] %>% 
       filter(date <= fecha_start) %>% 
       spread(variable, value, fill = NA) %>% 
       filter(complete.cases(.)) %>% 
