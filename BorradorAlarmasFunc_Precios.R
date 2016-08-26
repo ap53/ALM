@@ -116,7 +116,10 @@ carga_datos <- function(flias, fecha_truncado = NULL){
   
   # Dataframes defined in this procedure are read-only and will be used interactively
   # I need them in the .GlobalEnv
-  datos_long <<- leer_datos_long() # Reads the RDS file
+  # datos_long <- leer_datos_long() # Reads the RDS file
+  cargar_long()
+  
+  
   dias <<- datos_long %>% filter(source == 'pnl') %>% select(date) %>% unique %>% arrange(desc(date)) %>% mutate(IxDia = row_number() - 1)
   bulk <<- leer_bulk() # Reads the RDS file
   pnl <<- extraer_pnl() # Extracts pnl from datos_long    ¿DO I NEED THIS?
@@ -162,7 +165,17 @@ carga_datos <- function(flias, fecha_truncado = NULL){
     group_by(date, ticker, variable) %>% summarise(value = sum(value)) %>% 
     mutate(source = 'bulk') %>% ungroup
   
+  # if (exists('usarDT') && usarDT){
+  browser()
+  l <- list(dt, bulk3)
+  dt <<- rbindlist(l, use.names=TRUE)
+  keycols <- c('ticker', 'variable')
+  setDT(dt, keycols, keep.rownames=FALSE)
+  
+  # } else {
   datos_long <<- rbind(datos_long, bulk3)
+  # }
+  
   #   bulk3 %>% filter(date == fecha_base) %>% arrange(variable, ticker, date)
   #   DATOS %>% filter(Fecha == fecha_base) %>% select(starts_with('Cantidad BRE'))
   #   
@@ -211,6 +224,18 @@ leer_bulk <- function(){
 
 leer_datos_long <- function(){
   datos0 <- as.data.frame(readRDS(paste0(path, "data_long.RDS")))
+}
+
+cargar_long <- function() {
+  datos_long <<- leer_datos_long() # Reads the RDS file
+  dt <- datos_long
+  keycols <- c('ticker', 'variable')
+  setDT(dt, keycols, keep.rownames=FALSE)
+  dt <- copy(dt)
+  #unlockBinding("dt", environment)
+  assign('dt', dt, globalenv(), inherits = FALSE)
+  
+  invisible(NULL)
 }
 
 extraer_pnl <- function(){
@@ -474,9 +499,15 @@ generar_resultado <- function(datos_local, flias){
 
 # DICO CHANGE
 armar_diccionario <- function() {
-  datos_long %>% 
-    select(variable, source) %>% unique %>% 
-    arrange(source, variable)
+  if (exists('usarDT') && usarDT) {
+    dt %>% as_data_frame() %>% 
+      select(variable, source) %>% unique %>% 
+      arrange(source, variable)
+  } else {
+    datos_long %>% 
+      select(variable, source) %>% unique %>% 
+      arrange(source, variable)
+  }
 }
 # diccionario <- armar_diccionario()
 
@@ -742,9 +773,13 @@ evaluar_llave <- function(expr, flias, primer_flia){
   
   if (exists('usarYY') && usarYY) {
     ticker_ <- paste(flias[1], '|', flias[2])
-    subserie_1 <- datos_long %>% filter(ticker == ticker_, variable == nombre_compuesto) 
-    
-    ya_existe <- nrow(subserie_1) > 0
+    if (exists('usarDT') && usarDT) {
+      subserie_1 <- dt[.(ticker_, nombre_compuesto)] 
+      ya_existe <- nrow(subserie_1) > 0
+    } else {
+      subserie_1 <- datos_long %>% filter(ticker == ticker_, variable == nombre_compuesto) 
+      ya_existe <- nrow(subserie_1) > 0
+    }
   } else {
     nombre_compuesto_familia <- paste(nombre_compuesto, flias[1], sep = ' ')
     ya_existe <- nombre_compuesto_familia %in% colnames(DATOS)
@@ -757,7 +792,11 @@ evaluar_llave <- function(expr, flias, primer_flia){
     if (exists('usarYY') && usarYY) {
       nombre_1 <- paste(llamada_1, flias[1], sep = ' ')
       ticker_ <- flias[1]
-      subserie_1 <- datos_long %>% filter(ticker == ticker_, variable == llamada_1) 
+      if (exists('usarDT') && usarDT) {
+        subserie_1 <- dt[.(ticker_, llamada_1)] 
+      } else {
+        subserie_1 <- datos_long %>% filter(ticker == ticker_, variable == llamada_1) 
+      }
       # Hold on to the source, it'll be useful in the error reporting if there is not enough data.
       source_1 <- (subserie_1 %>% select(source) %>% slice(1))[[1]]
       # Remake 'pnl' out of possible 'local pnl'
@@ -765,7 +804,11 @@ evaluar_llave <- function(expr, flias, primer_flia){
       
       nombre_2 <- paste(llamada_2, flias[1], sep = ' ')
       ticker_ <- flias[2]
-      subserie_2 <- datos_long %>% filter(ticker == ticker_, variable == llamada_2) 
+      if (exists('usarDT') && usarDT) {
+        subserie_2 <- dt[.(ticker_, llamada_2)] 
+      } else {
+        subserie_2 <- datos_long %>% filter(ticker == ticker_, variable == llamada_2) 
+      }
       # I won't look at source_2, there is not much I can do if it's different from source_1...
       
       serie <- subserie_1 %>% 
@@ -777,7 +820,16 @@ evaluar_llave <- function(expr, flias, primer_flia){
                source = paste('local', source_1)) %>% 
         select(-ends_with('.y'))
       
-      datos_long <<- rbind(datos_long, serie)
+      # if (exists('usarDT') && usarDT) {
+        l <- list(dt, serie)
+        dt <<- rbindlist(l, use.names=TRUE)
+        keycols <- c('ticker', 'variable')
+        setDT(dt, keycols, keep.rownames=FALSE)
+        
+      # } else {
+        datos_long <<- rbind(datos_long, serie)
+      # }
+      
       dic_local <- diccionario
       dic_local <- rbind(dic_local, 
                          data_frame(variable = nombre_compuesto, 
@@ -863,14 +915,26 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
   
   fecha_start <- (dias %>% filter(IxDia == start) %>% select(date))[[1]]
   
-  datos_uno <- datos_long %>% filter(ticker == ticker_, variable == serie) %>% 
-    filter(date <= fecha_start) %>% 
-    spread(variable, value, fill = NA) %>% 
-    filter(complete.cases(.)) %>% 
-    arrange(desc(date)) %>% 
-    slice(1:duracion) %>% 
-    tbl_df
-  
+  if (exists('usarDT') && usarDT) {
+    a <- dt[.(ticker_, serie)]
+    if (is.na((a$date)[[1]])) browser()
+    
+    datos_uno <- dt[.(ticker_, serie)] %>% 
+      filter(date <= fecha_start) %>% 
+      spread(variable, value, fill = NA) %>% 
+      filter(complete.cases(.)) %>% 
+      arrange(desc(date)) %>% 
+      slice(1:duracion) %>% 
+      tbl_df
+  } else {
+    datos_uno <- datos_long %>% filter(ticker == ticker_, variable == serie) %>% 
+      filter(date <= fecha_start) %>% 
+      spread(variable, value, fill = NA) %>% 
+      filter(complete.cases(.)) %>% 
+      arrange(desc(date)) %>% 
+      slice(1:duracion) %>% 
+      tbl_df
+  }
   if(ver_serie) {
     # This is just for debugging
     print(datos_uno, n = nrow(datos_uno))
@@ -1245,7 +1309,12 @@ lista_Unicodes <- function(){
 }
 
 see <- function(ticker_, variable_ = '', slice_ = 1:10) {
-  d <- datos_long
+  if (exists('usarDT') && usarDT) {
+    d <- dt 
+  } else {
+    d <- datos_long 
+  }
+  
   if (ticker_ != '')
     d <- d %>% filter(ticker == ticker_)
   
