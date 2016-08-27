@@ -772,10 +772,10 @@ evaluar_llave <- function(expr, flias, primer_flia){
   nombre_compuesto <- paste(llamada_1, 'Ovr', llamada_2, sep = '_')
   
   if (exists('usarYY') && usarYY) {
-    ticker_ <- paste(flias[1], '|', flias[2])
+    ticker_ <- paste(flias[1], '|', flias[2]) 
     if (exists('usarDT') && usarDT) {
       subserie_1 <- dt[.(ticker_, nombre_compuesto)] 
-      ya_existe <- nrow(subserie_1) > 0
+      ya_existe <- (nrow(subserie_1) > 0 && !is.na((subserie_1 %>% select(date) %>% slice(1))[[1]]))
     } else {
       subserie_1 <- datos_long %>% filter(ticker == ticker_, variable == nombre_compuesto) 
       ya_existe <- nrow(subserie_1) > 0
@@ -784,6 +784,7 @@ evaluar_llave <- function(expr, flias, primer_flia){
     nombre_compuesto_familia <- paste(nombre_compuesto, flias[1], sep = ' ')
     ya_existe <- nombre_compuesto_familia %in% colnames(DATOS)
   }
+  
   
   if (!ya_existe){
     subserie <- list(primera = vector('numeric', 0L),
@@ -825,14 +826,14 @@ evaluar_llave <- function(expr, flias, primer_flia){
         dt <<- rbindlist(l, use.names=TRUE)
         keycols <- c('ticker', 'variable')
         setDT(dt, keycols, keep.rownames=FALSE)
-        
+
       # } else {
         datos_long <<- rbind(datos_long, serie)
       # }
-      
+
       dic_local <- diccionario
-      dic_local <- rbind(dic_local, 
-                         data_frame(variable = nombre_compuesto, 
+      dic_local <- rbind(dic_local,
+                         data_frame(variable = nombre_compuesto,
                                     source = source_1)
       )
       diccionario <<- dic_local
@@ -1370,6 +1371,10 @@ init_alarm_env <- function(){
   }
 
   if (exists('datos_long')) {
+    # Sometimes, for example when upgrading packages, datos_long may be present
+    # but dplyr isn't...
+    library(dplyr)
+    
     # This is the "correct" value for max_fecha_datos
     # Normally I wouldn't need to set it here, as cargar_datos() will set it after this...
     # But I sometimes re_source the code without re-running cargar_datos()...
