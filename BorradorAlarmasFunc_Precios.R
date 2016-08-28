@@ -269,7 +269,7 @@ cambiar_fecha_base <- function(fecha = NULL){
   }
   
   if (is.null(fecha)) {
-    return((DATOS %>% filter(IxDia == 0) %>% select(Fecha))[[1]])
+    return((dias %>% select(date) %>% slice(n()))[[1]])
   } else {
     if (class(fecha) == 'character') {
       
@@ -289,12 +289,12 @@ cambiar_fecha_base <- function(fecha = NULL){
       if (length(fecha) > 1) stop('Sólo se puede pasar una fecha')
     )
     
-    if (fecha <= (DATOS %>% arrange(Fecha) %>% slice(1L) %>% select(Fecha))[[1]])
+    if (fecha <= (dias %>% select(date) %>% slice(n()))[[1]])
       stop(paste(fecha, 'es demasiado temprano'))
     
     if (wday(fecha) %in% c(1, 7)) stop(paste(fecha, 'es fin de semana'))
     
-    ff <- DATOS %>% filter(Fecha == fecha) %>% select(Fecha)
+    ff <- dias %>% filter(date == fecha) %>% select(date)
     if (ff %>% nrow == 0 ) stop(paste(fecha, 'no figura en datos'))
     return(ff[[1]])
   }
@@ -1018,20 +1018,6 @@ preparar_output <- function(res, archivo = NULL, silencioso = FALSE) {
     
     return(salida)
   }
-}
-
-ayuda_debug_llaves <- function(){
-  DATOS <- DATOS %>% mutate(`Exposure_Ovr_PatFamiliaFinal BREAKOUTS+DONCHIAN` = 
-                              `Exposure BREAKOUTS+DONCHIAN` /
-                              `PatFamiliaFinal BREAKOUTS+DONCHIAN`) 
-  
-  DATOS <- DATOS %>% select(Fecha, IxDia, `PatFamiliaFinal BREAKOUTS+DONCHIAN`, 
-                            `Exposure BREAKOUTS+DONCHIAN`,
-                            `Exposure_Ovr_PatFamiliaFinal BREAKOUTS+DONCHIAN`)
-  
-  DATOS <- DATOS %>% select(-`Exposure_Ovr_PatFamiliaFinal BREAKOUTS+DONCHIAN`)
-  
-  DATOS %>% select(`Exposure_Ovr_PatFamiliaFinal BREAKOUTS+DONCHIAN`)
 }
 
 call_tree_hadley <- function(x, width = getOption("width")) 
