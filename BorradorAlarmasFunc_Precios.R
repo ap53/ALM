@@ -131,41 +131,35 @@ carga_datos <- function(flias, fecha_truncado = NULL){
   #####df1# df <- generar_df(pnl)
   
   # Define fecha_base as global so it can be used interactively
-  if (exists('usarYY') && usarYY){
-    # fecha_base <<- (datos_long %>% filter(source == 'pnl') %>% summarize(max(date)))[[1]]
-    # fecha_base <<- dtb[.('TOTAL T+ L', 'nav'), date][order(-date), mult = "first"]
-    fecha_base <<- dtb[.('TOTAL T+ L', 'nav'), .(date)][order(-date), date][1]
-  } else {
-    fecha_base <<- (df %>% filter(IxDia == 0) %>% select(Fecha))[[1]]
-  }
-  alarm_env$max_fecha_datos <- fecha_base
+  alarm_env$max_fecha_datos <<- dtb[.('TOTAL T+ L', 'nav'), .(date)][order(-date), date][1]
+  fecha_base <- alarm_env$max_fecha_datos
   
   #####df2# Build data series to be used in alarm definitions
   bulk2 <- familias %>% tbl_df %>% 
-   filter(Descripcion %in% familias_importantes) %>% 
-   select(Familia = Descripcion, CarteraNom) %>% 
-   inner_join(bulk %>% 
-                select(Periodo, CarteraNom, Valuacion, Cantidad, 
-                       AT12, TipoNombre, EspecieNombre) %>% 
-                mutate(Margen = Valuacion, Exposure = abs(Valuacion)), 
-              by = 'CarteraNom') %>% 
-   gather(variable, value, Margen, Cantidad, Exposure) %>% 
-   mutate(borrar = 
-            ifelse (
-              (variable == 'Margen' & 
-                 ((AT12 != 'Cash Margin Accounts') | 
-                    (TipoNombre != 'Cash and Banks') | 
-                    (!str_detect(EspecieNombre, ' Margin ')))
-              ) |
-                variable == 'Exposure' & (TipoNombre %in% noExposureID), 1, 0) ) %>% 
-   select(date = Periodo, ticker = Familia, variable, value, 
-          borrar, AT12, TipoNombre, EspecieNombre) %>% 
-   filter(borrar != 1) %>% 
-   tbl_df
+    filter(Descripcion %in% familias_importantes) %>% 
+    select(Familia = Descripcion, CarteraNom) %>% 
+    inner_join(bulk %>% 
+                 select(Periodo, CarteraNom, Valuacion, Cantidad, 
+                        AT12, TipoNombre, EspecieNombre) %>% 
+                 mutate(Margen = Valuacion, Exposure = abs(Valuacion)), 
+               by = 'CarteraNom') %>% 
+    gather(variable, value, Margen, Cantidad, Exposure) %>% 
+    mutate(borrar = 
+             ifelse (
+               (variable == 'Margen' & 
+                  ((AT12 != 'Cash Margin Accounts') | 
+                     (TipoNombre != 'Cash and Banks') | 
+                     (!str_detect(EspecieNombre, ' Margin ')))
+               ) |
+                 variable == 'Exposure' & (TipoNombre %in% noExposureID), 1, 0) ) %>% 
+    select(date = Periodo, ticker = Familia, variable, value, 
+           borrar, AT12, TipoNombre, EspecieNombre) %>% 
+    filter(borrar != 1) %>% 
+    tbl_df
   
   bulk3 <- bulk2 %>% select(date, ticker, variable, value) %>% 
-   group_by(date, ticker, variable) %>% summarise(value = sum(value)) %>% 
-   mutate(source = 'bulk') %>% ungroup
+    group_by(date, ticker, variable) %>% summarise(value = sum(value)) %>% 
+    mutate(source = 'bulk') %>% ungroup
   
   # if (exists('usarDT') && usarDT){
   l <- list(dtb, bulk3)
@@ -476,21 +470,16 @@ generar_resultado <- function(datos_local, flias){
 # DICO CHANGE
 armar_diccionario <- function() {
   # if (exists('usarDT') && usarDT) {
-    dtb %>% as_data_frame() %>% 
-      select(variable, source) %>% unique %>% 
-      arrange(source, variable)
+  dtb %>% as_data_frame() %>% 
+    select(variable, source) %>% unique %>% 
+    arrange(source, variable)
 }
 # diccionario <- armar_diccionario()
 
 diccionario_terminos <- function(mostrar_llaves = FALSE){
-  if (exists('usarYY') && usarYY){
-    terminos <- (diccionario %>% select(variable))[[1]]
-    
-    if (mostrar_llaves) return(terminos) else return(terminos[which(!str_detect(terminos, '_Ovr_'))])
-  } else {
-    terminos <- colnames(DATOS)[-c(1, 2)] %>% str_replace(' .*$', '') %>% unique()
-    if (mostrar_llaves) return(terminos) else return(terminos[which(!str_detect(terminos, '_Ovr_'))])
-  }
+  terminos <- (diccionario %>% select(variable))[[1]]
+  
+  if (mostrar_llaves) return(terminos) else return(terminos[which(!str_detect(terminos, '_Ovr_'))])
 }
 
 verificar_diccionario <- function(nombre){
@@ -556,11 +545,6 @@ correr_alarma <- function(expr, importancia = 5, flias_1, flias_2 = flias_1,
   for (llave in llaves) {
     lista_result_llave <- evaluar_llave(llave, flias, primer_flia = 1)
     expr_q <- stri_replace_all_fixed(expr_q, llave, lista_result_llave[[1]])
-    
-    # Update DATOS in global environment
-    if (!(exists('usarYY') && usarYY)) {
-      DATOS <<- lista_result_llave[[2]]
-    }
   }
   
   # terminos_parciales <- unlist(str_split(expr_q, '>[=]?|==|!=|<[=]?'))
@@ -742,87 +726,60 @@ evaluar_llave <- function(expr, flias, primer_flia){
   llamada_2 <- str_replace(llamadas[2, ], '\\(.*', '')
   nombre_compuesto <- paste(llamada_1, 'Ovr', llamada_2, sep = '_')
   
-  if (exists('usarYY') && usarYY) {
-    ticker_ <- paste(flias[1], '|', flias[2]) 
-    # if (exists('usarDT') && usarDT) {
-      subserie_1 <- dtb[.(ticker_, nombre_compuesto)] 
-      ya_existe <- (nrow(subserie_1) > 0 && !is.na((subserie_1 %>% select(date) %>% slice(1))[[1]]))
-  } else {
-    nombre_compuesto_familia <- paste(nombre_compuesto, flias[1], sep = ' ')
-    ya_existe <- nombre_compuesto_familia %in% colnames(DATOS)
-  }
-  
+  ticker_ <- paste(flias[1], '|', flias[2]) 
+  # if (exists('usarDT') && usarDT) {
+  subserie_1 <- dtb[.(ticker_, nombre_compuesto)] 
+  ya_existe <- (nrow(subserie_1) > 0 && !is.na((subserie_1 %>% select(date) %>% slice(1))[[1]]))
   
   if (!ya_existe){
     subserie <- list(primera = vector('numeric', 0L),
                      segunda = vector('numeric', 0L) )
     
-    if (exists('usarYY') && usarYY) {
-      nombre_1 <- paste(llamada_1, flias[1], sep = ' ')
-      ticker_ <- flias[1]
-      # if (exists('usarDT') && usarDT) {
-        subserie_1 <- dtb[.(ticker_, llamada_1)] 
-      # Hold on to the source, it'll be useful in the error reporting if there is not enough data.
-      source_1 <- (subserie_1 %>% select(source) %>% slice(1))[[1]]
-      # Remake 'pnl' out of possible 'local pnl'
-      if (str_detect(source_1, 'pnl') && (source_1 != 'pnl')) source_1 <- 'pnl'
-      
-      nombre_2 <- paste(llamada_2, flias[1], sep = ' ')
-      ticker_ <- flias[2]
-      # if (exists('usarDT') && usarDT) {
-        subserie_2 <- dtb[.(ticker_, llamada_2)] 
-      # I won't look at source_2, there is not much I can do if it's different from source_1...
-      
-      serie <- subserie_1 %>% 
-        inner_join(subserie_2, by = 'date') %>% 
-        rename(ticker = ticker.x, variable = variable.x, value = value.x, source = source.x) %>% 
-        mutate(ticker = paste(flias[1], '|', flias[2]),
-               variable = nombre_compuesto,
-               value = value / value.y,
-               source = paste('local', source_1)) %>% 
-        select(-ends_with('.y'))
-      
-      # if (exists('usarDT') && usarDT) {
-        l <- list(dtb, serie)
-        dtb <<- rbindlist(l, use.names=TRUE)
-        keycols <- c('ticker', 'variable')
-        setDT(dtb, keycols, keep.rownames=FALSE)
-
-      # } else {
-        datos_long <<- rbind(datos_long, serie)
-      # }
-
-      dic_local <- diccionario
-      dic_local <- rbind(dic_local,
-                         data_frame(variable = nombre_compuesto,
-                                    source = source_1)
-      )
-      diccionario <<- dic_local
-    } else {
-      nombre_1 <- paste(llamada_1, flias[1], sep = ' ')
-      ix_columna_datos <- which(colnames(DATOS) == nombre_1)
-      subserie_1 <- DATOS[, ix_columna_datos][[1]]
-      
-      nombre_2 <- paste(llamada_2, flias[1], sep = ' ')
-      ix_columna_datos <- which(colnames(DATOS) == nombre_2)
-      subserie_2 <- DATOS[, ix_columna_datos][[1]]
-      
-      serie <- (subserie_1 / subserie_2)
-      
-      DATOS[, length(colnames(DATOS)) + 1] <- serie
-      colnames(DATOS)[length(colnames(DATOS))] <- nombre_compuesto_familia 
-    }
+    nombre_1 <- paste(llamada_1, flias[1], sep = ' ')
+    ticker_ <- flias[1]
+    # if (exists('usarDT') && usarDT) {
+    subserie_1 <- dtb[.(ticker_, llamada_1)] 
+    # Hold on to the source, it'll be useful in the error reporting if there is not enough data.
+    source_1 <- (subserie_1 %>% select(source) %>% slice(1))[[1]]
+    # Remake 'pnl' out of possible 'local pnl'
+    if (str_detect(source_1, 'pnl') && (source_1 != 'pnl')) source_1 <- 'pnl'
+    
+    nombre_2 <- paste(llamada_2, flias[1], sep = ' ')
+    ticker_ <- flias[2]
+    # if (exists('usarDT') && usarDT) {
+    subserie_2 <- dtb[.(ticker_, llamada_2)] 
+    # I won't look at source_2, there is not much I can do if it's different from source_1...
+    
+    serie <- subserie_1 %>% 
+      inner_join(subserie_2, by = 'date') %>% 
+      rename(ticker = ticker.x, variable = variable.x, value = value.x, source = source.x) %>% 
+      mutate(ticker = paste(flias[1], '|', flias[2]),
+             variable = nombre_compuesto,
+             value = value / value.y,
+             source = paste('local', source_1)) %>% 
+      select(-ends_with('.y'))
+    
+    # if (exists('usarDT') && usarDT) {
+    l <- list(dtb, serie)
+    dtb <<- rbindlist(l, use.names=TRUE)
+    keycols <- c('ticker', 'variable')
+    setDT(dtb, keycols, keep.rownames=FALSE)
+    
+    # } else {
+    datos_long <<- rbind(datos_long, serie)
+    # }
+    
+    dic_local <- diccionario
+    dic_local <- rbind(dic_local,
+                       data_frame(variable = nombre_compuesto,
+                                  source = source_1)
+    )
+    diccionario <<- dic_local
   }
   
-  if (exists('usarYY') && usarYY) {
-    return(nombre_compuesto)
-  } else {
-    return(list(nombre_compuesto, DATOS))
-  }
-  
+  return(nombre_compuesto)
 }
 
-#### Chanchadas a reemplazar ####
 evaluar_termino <- function(f, familia_target){
   # assign("familia_target_", familia_target, envir=globalenv())
   
@@ -1320,7 +1277,7 @@ init_alarm_env <- function(){
     msg <- paste('Alarmas corrida:', sum(alarm_env$cant_alarmas), 
                  '[', paste(alarm_env$cant_alarmas, collapse = ', '), ']')
   }
-
+  
   if (exists('dtb') || exists('datos_long')) {
     # Sometimes, for example when upgrading packages, datos_long may be present
     # but dplyr isn't...
