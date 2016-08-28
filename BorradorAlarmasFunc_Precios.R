@@ -62,7 +62,7 @@ corrida_alarmas <- function(filename, fecha_inicial = NULL, fecha_final = fecha_
   on.exit(fecha_base <<- alarm_env$max_fecha_datos)
   
   if (is.null(fecha_inicial)) {
-    fecha_inicial <- (DATOS %>% filter(IxDia == 0) %>% select(Fecha))[[1]]
+    fecha_inicial <- fecha_base
   } else {
     # Not really setting fecha_base, just taking advantage of date validation
     fecha_inicial <- cambiar_fecha_base(fecha_inicial)
@@ -122,96 +122,72 @@ carga_datos <- function(flias, fecha_truncado = NULL){
   
   dias <<- datos_long %>% filter(source == 'pnl') %>% select(date) %>% unique %>% arrange(desc(date)) %>% mutate(IxDia = row_number() - 1)
   bulk <<- leer_bulk() # Reads the RDS file
-  pnl <<- extraer_pnl() # Extracts pnl from datos_long    ¿DO I NEED THIS?
+  # pnl <<- extraer_pnl() # Extracts pnl from datos_long    ¿DO I NEED THIS?
   # prc <<- leer_prc()
   familias <<- leer_familias()
   
-  if (!is.null(fecha_truncado)) truncar_fechas_recientes(fecha_truncado)
+  # if (!is.null(fecha_truncado)) truncar_fechas_recientes(fecha_truncado)
   
-  df <- generar_df(pnl)
+  #####df1# df <- generar_df(pnl)
   
   # Define fecha_base as global so it can be used interactively
   if (exists('usarYY') && usarYY){
-    fecha_base <<- (datos_long %>% filter(source == 'pnl') %>% summarize(max(date)))[[1]]
+    # fecha_base <<- (datos_long %>% filter(source == 'pnl') %>% summarize(max(date)))[[1]]
+    fecha_base <<- dtb[.('TOTAL T+ L', 'nav'), date][[1]]
   } else {
     fecha_base <<- (df %>% filter(IxDia == 0) %>% select(Fecha))[[1]]
   }
   alarm_env$max_fecha_datos <- fecha_base
   
-  # Build data series to be used in alarm definitions
+  #####df2# Build data series to be used in alarm definitions
+  browser()
   bulk2 <- familias %>% tbl_df %>% 
-    filter(Descripcion %in% familias_importantes) %>% 
-    select(Familia = Descripcion, CarteraNom) %>% 
-    inner_join(bulk %>% 
-                 select(Periodo, CarteraNom, Valuacion, Cantidad, 
-                        AT12, TipoNombre, EspecieNombre) %>% 
-                 mutate(Margen = Valuacion, Exposure = abs(Valuacion)), 
-               by = 'CarteraNom') %>% 
-    gather(variable, value, Margen, Cantidad, Exposure) %>% 
-    mutate(borrar = 
-             ifelse (
-               (variable == 'Margen' & 
-                  ((AT12 != 'Cash Margin Accounts') | 
-                     (TipoNombre != 'Cash and Banks') | 
-                     (!str_detect(EspecieNombre, ' Margin ')))
-               ) |
-                 variable == 'Exposure' & (TipoNombre %in% noExposureID), 1, 0) ) %>% 
-    select(date = Periodo, ticker = Familia, variable, value, 
-           borrar, AT12, TipoNombre, EspecieNombre) %>% 
-    filter(borrar != 1) %>% 
-    tbl_df
+   filter(Descripcion %in% familias_importantes) %>% 
+   select(Familia = Descripcion, CarteraNom) %>% 
+   inner_join(bulk %>% 
+                select(Periodo, CarteraNom, Valuacion, Cantidad, 
+                       AT12, TipoNombre, EspecieNombre) %>% 
+                mutate(Margen = Valuacion, Exposure = abs(Valuacion)), 
+              by = 'CarteraNom') %>% 
+   gather(variable, value, Margen, Cantidad, Exposure) %>% 
+   mutate(borrar = 
+            ifelse (
+              (variable == 'Margen' & 
+                 ((AT12 != 'Cash Margin Accounts') | 
+                    (TipoNombre != 'Cash and Banks') | 
+                    (!str_detect(EspecieNombre, ' Margin ')))
+              ) |
+                variable == 'Exposure' & (TipoNombre %in% noExposureID), 1, 0) ) %>% 
+   select(date = Periodo, ticker = Familia, variable, value, 
+          borrar, AT12, TipoNombre, EspecieNombre) %>% 
+   filter(borrar != 1) %>% 
+   tbl_df
   
   bulk3 <- bulk2 %>% select(date, ticker, variable, value) %>% 
-    group_by(date, ticker, variable) %>% summarise(value = sum(value)) %>% 
-    mutate(source = 'bulk') %>% ungroup
+   group_by(date, ticker, variable) %>% summarise(value = sum(value)) %>% 
+   mutate(source = 'bulk') %>% ungroup
   
   # if (exists('usarDT') && usarDT){
-  browser()
-  l <- list(dt, bulk3)
-  dt <<- rbindlist(l, use.names=TRUE)
+  l <- list(dtb, bulk3)
+  dtb <<- rbindlist(l, use.names=TRUE)
   keycols <- c('ticker', 'variable')
-  setDT(dt, keycols, keep.rownames=FALSE)
+  setDT(dtb, keycols, keep.rownames=FALSE)
   
   # } else {
-  datos_long <<- rbind(datos_long, bulk3)
+  #####df3# datos_long <<- rbind(datos_long, bulk3)
   # }
   
-  #   bulk3 %>% filter(date == fecha_base) %>% arrange(variable, ticker, date)
-  #   DATOS %>% filter(Fecha == fecha_base) %>% select(starts_with('Cantidad BRE'))
-  #   
-  #   bulk3 %>% filter(date == fecha_base) %>% filter(variable == 'Margen') %>% arrange(variable, ticker, date)
-  #   DATOS %>% filter(Fecha == fecha_base) %>% select(starts_with('Margen BREAKOUTS'))
-  #   
-  #   bulk3 %>% filter(date == fecha_base) %>% filter(variable == 'Exposure') %>% arrange(variable, ticker, date)
-  #   DATOS %>% filter(Fecha == fecha_base) %>% select(starts_with('Exposure BREA'))
-  
-  # rm(bulk2, bulk3)
-  
-  df <- generar_margen(df, flias)
-  df <- generar_cantidad(df, flias)
-  # df <- generar_patrimonio_final(df, flias)
-  df <- generar_exposure(df, flias)
-  # df <- generar_resultado(df, flias)
-  df <- generar_objetos_pnl(df, flias)
+  #####df4#  df <- generar_margen(df, flias)
+  #####df4#  df <- generar_cantidad(df, flias)
+  #####df4#  # df <- generar_patrimonio_final(df, flias)
+  #####df4#  df <- generar_exposure(df, flias)
+  #####df4#  # df <- generar_resultado(df, flias)
+  #####df4#  df <- generar_objetos_pnl(df, flias)
   
   diccionario <<- armar_diccionario()
   
   return(df)
 }
-
-truncar_fechas_recientes <- function(fecha_truncado){
-  if (class(fecha_truncado) == 'character') fecha_truncado <- dmy(fecha_truncado)
-  
-  if (class(fecha_truncado) != 'Date') stop(paste(fecha_truncado, 'no es una fecha válida'))
-  if (fecha_truncado <= dmy(1/1/2012)) stop(paste(fecha_truncado, 'es demasiado temprano'))
-  
-  bulk <- bulk %>% 
-    filter(Periodo <= fecha_truncado) 
-  
-  pnl <- pnl %>% 
-    filter(Fecha <= fecha_truncado) 
-}
-
 
 leer_bulk <- function(){
   bulk <- as.data.frame(readRDS(paste0(path, "bulk.RDS")))
@@ -228,12 +204,12 @@ leer_datos_long <- function(){
 
 cargar_long <- function() {
   datos_long <<- leer_datos_long() # Reads the RDS file
-  dt <- datos_long
+  dtb <- datos_long
   keycols <- c('ticker', 'variable')
-  setDT(dt, keycols, keep.rownames=FALSE)
-  dt <- copy(dt)
-  #unlockBinding("dt", environment)
-  assign('dt', dt, globalenv(), inherits = FALSE)
+  setDT(dtb, keycols, keep.rownames=FALSE)
+  dtb <- copy(dtb)
+  #unlockBinding("dtb", environment)
+  assign('dtb', dtb, globalenv(), inherits = FALSE)
   
   invisible(NULL)
 }
@@ -271,13 +247,13 @@ limpiar_datos <- function(){
   
 }
 
-generar_df <- function(X){
-  datos <- X %>% distinct(Fecha) %>% select(Fecha) %>% 
-    arrange(desc(Fecha)) %>% 
-    mutate(IxDia = row_number() - 1) %>% tbl_df
-  
-  return(datos)
-}
+# generar_df <- function(X){
+#   datos <- X %>% distinct(Fecha) %>% select(Fecha) %>% 
+#     arrange(desc(Fecha)) %>% 
+#     mutate(IxDia = row_number() - 1) %>% tbl_df
+#   
+#   return(datos)
+# }
 
 cambiar_fecha_base <- function(fecha = NULL){
   # The default is to calculate alarms as seen from the most recent day in the data.
@@ -499,15 +475,10 @@ generar_resultado <- function(datos_local, flias){
 
 # DICO CHANGE
 armar_diccionario <- function() {
-  if (exists('usarDT') && usarDT) {
-    dt %>% as_data_frame() %>% 
+  # if (exists('usarDT') && usarDT) {
+    dtb %>% as_data_frame() %>% 
       select(variable, source) %>% unique %>% 
       arrange(source, variable)
-  } else {
-    datos_long %>% 
-      select(variable, source) %>% unique %>% 
-      arrange(source, variable)
-  }
 }
 # diccionario <- armar_diccionario()
 
@@ -773,13 +744,9 @@ evaluar_llave <- function(expr, flias, primer_flia){
   
   if (exists('usarYY') && usarYY) {
     ticker_ <- paste(flias[1], '|', flias[2]) 
-    if (exists('usarDT') && usarDT) {
-      subserie_1 <- dt[.(ticker_, nombre_compuesto)] 
+    # if (exists('usarDT') && usarDT) {
+      subserie_1 <- dtb[.(ticker_, nombre_compuesto)] 
       ya_existe <- (nrow(subserie_1) > 0 && !is.na((subserie_1 %>% select(date) %>% slice(1))[[1]]))
-    } else {
-      subserie_1 <- datos_long %>% filter(ticker == ticker_, variable == nombre_compuesto) 
-      ya_existe <- nrow(subserie_1) > 0
-    }
   } else {
     nombre_compuesto_familia <- paste(nombre_compuesto, flias[1], sep = ' ')
     ya_existe <- nombre_compuesto_familia %in% colnames(DATOS)
@@ -793,11 +760,8 @@ evaluar_llave <- function(expr, flias, primer_flia){
     if (exists('usarYY') && usarYY) {
       nombre_1 <- paste(llamada_1, flias[1], sep = ' ')
       ticker_ <- flias[1]
-      if (exists('usarDT') && usarDT) {
-        subserie_1 <- dt[.(ticker_, llamada_1)] 
-      } else {
-        subserie_1 <- datos_long %>% filter(ticker == ticker_, variable == llamada_1) 
-      }
+      # if (exists('usarDT') && usarDT) {
+        subserie_1 <- dtb[.(ticker_, llamada_1)] 
       # Hold on to the source, it'll be useful in the error reporting if there is not enough data.
       source_1 <- (subserie_1 %>% select(source) %>% slice(1))[[1]]
       # Remake 'pnl' out of possible 'local pnl'
@@ -805,11 +769,8 @@ evaluar_llave <- function(expr, flias, primer_flia){
       
       nombre_2 <- paste(llamada_2, flias[1], sep = ' ')
       ticker_ <- flias[2]
-      if (exists('usarDT') && usarDT) {
-        subserie_2 <- dt[.(ticker_, llamada_2)] 
-      } else {
-        subserie_2 <- datos_long %>% filter(ticker == ticker_, variable == llamada_2) 
-      }
+      # if (exists('usarDT') && usarDT) {
+        subserie_2 <- dtb[.(ticker_, llamada_2)] 
       # I won't look at source_2, there is not much I can do if it's different from source_1...
       
       serie <- subserie_1 %>% 
@@ -822,10 +783,10 @@ evaluar_llave <- function(expr, flias, primer_flia){
         select(-ends_with('.y'))
       
       # if (exists('usarDT') && usarDT) {
-        l <- list(dt, serie)
-        dt <<- rbindlist(l, use.names=TRUE)
+        l <- list(dtb, serie)
+        dtb <<- rbindlist(l, use.names=TRUE)
         keycols <- c('ticker', 'variable')
-        setDT(dt, keycols, keep.rownames=FALSE)
+        setDT(dtb, keycols, keep.rownames=FALSE)
 
       # } else {
         datos_long <<- rbind(datos_long, serie)
@@ -896,7 +857,7 @@ armar_lista_args <- function(...){
 }
 
 calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c('percentil'), 
-                      p = NULL, ver_serie = FALSE){
+                             p = NULL, ver_serie = FALSE){
   
   # browser()  #####################################################
   
@@ -916,26 +877,18 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
   
   fecha_start <- (dias %>% filter(IxDia == start) %>% select(date))[[1]]
   
-  if (exists('usarDT') && usarDT) {
-    a <- dt[.(ticker_, serie)]
-    if (is.na((a$date)[[1]])) browser()
-    
-    datos_uno <- dt[.(ticker_, serie)] %>% 
-      filter(date <= fecha_start) %>% 
-      spread(variable, value, fill = NA) %>% 
-      filter(complete.cases(.)) %>% 
-      arrange(desc(date)) %>% 
-      slice(1:duracion) %>% 
-      tbl_df
-  } else {
-    datos_uno <- datos_long %>% filter(ticker == ticker_, variable == serie) %>% 
-      filter(date <= fecha_start) %>% 
-      spread(variable, value, fill = NA) %>% 
-      filter(complete.cases(.)) %>% 
-      arrange(desc(date)) %>% 
-      slice(1:duracion) %>% 
-      tbl_df
-  }
+  # if (exists('usarDT') && usarDT) {
+  a <- dtb[.(ticker_, serie)]
+  if (is.na((a$date)[[1]])) browser()
+  
+  datos_uno <- a %>% 
+    filter(date <= fecha_start) %>% 
+    spread(variable, value, fill = NA) %>% 
+    filter(complete.cases(.)) %>% 
+    arrange(desc(date)) %>% 
+    slice(1:duracion) %>% 
+    tbl_df
+  
   if(ver_serie) {
     # This is just for debugging
     print(datos_uno, n = nrow(datos_uno))
@@ -979,7 +932,7 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
       stop('Faltan datos para ', ticker_, '(cantidad)', call. = FALSE)
     }
   }
-
+  
   # If I got here, it means that:
   #    1) duracion > 1
   #    2) Data is OK
@@ -1310,19 +1263,17 @@ lista_Unicodes <- function(){
 }
 
 see <- function(ticker_, variable_ = '', slice_ = 1:10) {
-  if (exists('usarDT') && usarDT) {
-    d <- dt 
-  } else {
-    d <- datos_long 
+  
+  if (ticker_ != '' && variable_ != ''){
+    d <- dtb[.(ticker_, variable_)]
+    
+  } else if (ticker_ != '') {
+    d <- dtb[.(ticker_)]
+    
+  }  else if (variable_ != '') {
+    d <- dtb[.(unique(ticker_), variable_)]
   }
-  
-  if (ticker_ != '')
-    d <- d %>% filter(ticker == ticker_)
-  
-  if (variable_ != '')
-    d <- d %>% filter(variable == variable_)
-  
-  d %>% arrange(desc(date)) %>% slice(slice_)
+  d[order(-date)][slice_, ]
 }
 
 init_alarm_env <- function(){
@@ -1370,16 +1321,15 @@ init_alarm_env <- function(){
                  '[', paste(alarm_env$cant_alarmas, collapse = ', '), ']')
   }
 
-  if (exists('datos_long')) {
+  if (exists('dtb') || exists('datos_long')) {
     # Sometimes, for example when upgrading packages, datos_long may be present
     # but dplyr isn't...
-    library(dplyr)
+    library(data.table)
     
     # This is the "correct" value for max_fecha_datos
     # Normally I wouldn't need to set it here, as cargar_datos() will set it after this...
     # But I sometimes re_source the code without re-running cargar_datos()...
-    alarm_env$max_fecha_datos <- (datos_long %>% filter(source == 'pnl') %>%
-                                     summarize(max(date)))[[1]]
+    alarm_env$max_fecha_datos <- dtb[.('TOTAL T+ L', 'nav'), date][[1]]
   } else {
     # In this case, just a place holder. (¿Needed?)
     alarm_env$max_fecha_datos <- Sys.Date()
@@ -1391,4 +1341,6 @@ init_alarm_env <- function(){
 }
 
 
-alarm_env <- init_alarm_env()
+if (!exists('dtb')) {
+  alarm_env <- init_alarm_env()
+}
