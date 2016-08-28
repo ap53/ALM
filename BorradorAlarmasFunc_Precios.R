@@ -133,14 +133,14 @@ carga_datos <- function(flias, fecha_truncado = NULL){
   # Define fecha_base as global so it can be used interactively
   if (exists('usarYY') && usarYY){
     # fecha_base <<- (datos_long %>% filter(source == 'pnl') %>% summarize(max(date)))[[1]]
-    fecha_base <<- dtb[.('TOTAL T+ L', 'nav'), date][[1]]
+    # fecha_base <<- dtb[.('TOTAL T+ L', 'nav'), date][order(-date), mult = "first"]
+    fecha_base <<- dtb[.('TOTAL T+ L', 'nav'), .(date)][order(-date), date][1]
   } else {
     fecha_base <<- (df %>% filter(IxDia == 0) %>% select(Fecha))[[1]]
   }
   alarm_env$max_fecha_datos <- fecha_base
   
   #####df2# Build data series to be used in alarm definitions
-  browser()
   bulk2 <- familias %>% tbl_df %>% 
    filter(Descripcion %in% familias_importantes) %>% 
    select(Familia = Descripcion, CarteraNom) %>% 
@@ -1329,7 +1329,7 @@ init_alarm_env <- function(){
     # This is the "correct" value for max_fecha_datos
     # Normally I wouldn't need to set it here, as cargar_datos() will set it after this...
     # But I sometimes re_source the code without re-running cargar_datos()...
-    alarm_env$max_fecha_datos <- dtb[.('TOTAL T+ L', 'nav'), date][[1]]
+    alarm_env$max_fecha_datos <- dtb[.('TOTAL T+ L', 'nav'), .(date)][order(-date), date][1]
   } else {
     # In this case, just a place holder. (¿Needed?)
     alarm_env$max_fecha_datos <- Sys.Date()
