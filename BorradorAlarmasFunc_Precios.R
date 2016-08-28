@@ -56,6 +56,8 @@ lsos <- function(..., n=20) {
 }
 
 corrida_alarmas <- function(filename, fecha_inicial = NULL, fecha_final = fecha_inicial){
+  ptm <- proc.time()
+  
   # # Calls to cambiar_fecha_base are ignored during a corrida_alarmas,
   # # fecha_base is controlled by a for loop
   # #     ==> reset fecha_base to "pnl_last_day" on exit.
@@ -106,6 +108,8 @@ corrida_alarmas <- function(filename, fecha_inicial = NULL, fecha_final = fecha_
   id_alarma <- alarm_env$id_alarma
   cat(id_alarma,file = "id_alarmas_file.txt",sep = "\n")
   
+  if (sum(alarm_env$cant_alarmas) <= 1) {verbo = 'Tardó: '} else {verbo = 'Tardaron: '}
+  cat(verbo, (proc.time() - ptm)[3], ' segundos...\n')
 }
 
 carga_datos <- function(flias, fecha_truncado = NULL){
