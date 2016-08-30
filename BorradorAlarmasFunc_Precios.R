@@ -868,19 +868,21 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
   fecha_start <- (dias %>% filter(IxDia == start) %>% select(date))[[1]]
   
 
-  # if (exists('usarDT') && usarDT) {
+  datos_uno <- dtb[.(ticker_, serie), nomatch = 0] %>% filter(date <= fecha_start)
+  if (nrow(datos_uno) == 0) {
+    stop('Faltan datos para ', serie, '(', ticker_, ')  (no hay nada)', call. = FALSE)
+  }
+  
+    # if (exists('usarDT') && usarDT) {
   if (!duracion_anclada) {
-    datos_uno <- dtb[.(ticker_, serie)] %>% 
-      filter(date <= fecha_start) %>% 
-      spread(variable, value, fill = NA) %>% 
+    datos_uno <- datos_uno %>% 
       filter(complete.cases(.)) %>% 
       arrange(desc(date)) %>% 
       slice(1:duracion) %>%                #    <<<-- 'duracion' selection of records
       tbl_df
 
   } else {
-    datos_uno <- dtb[.(ticker_, serie)] %>% 
-      filter(date <= fecha_start) %>% 
+    datos_uno <- datos_uno %>% 
       spread(variable, value, fill = NA) %>% 
       filter(complete.cases(.)) %>% 
       arrange(desc(date)) %>% 
@@ -960,9 +962,9 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
   } else if (post_proceso == '%neg') {
     return(sum(v_serie < 0) / length(v_serie))
   } else if (post_proceso == 'ultimo') {
-    return(dato_uno)
+    return(v_serie[1])
   } else if (post_proceso == 'primero') {
-    return(dato_uno)
+    return(v_serie[length(v_serie)])
   } else
     stop('post_proceso: ', ticker_, ' desconocido.', call. = FALSE)
 }
@@ -1324,8 +1326,17 @@ lista_Unicodes <- function(){
 ver <- function(ticker_, variable_ = '', slice_ = 1:10) {
   
   if (ticker_ != '' && variable_ != ''){
-    d <- dtb[.(ticker_, variable_)]
-    return(d[order(-date)][slice_, ])
+    d <- dtb[.(ticker_, variable_), nomatch = 0]
+    primer_fila_pedida <- slice_[1]
+    ultima_fila_pedida <- slice_[length(slice_)]
+    if (nrow(d) == 0) {
+      print('No hay ningún dato en la serie ')
+    } else if (nrow(d) < primer_fila_pedida) {
+      print('No hay ningún registro en el rango pedido (sólo hay', nrow(d), 'filas) ')
+    } else if (nrow(d) < ultima_fila_pedida) {
+      print('No hay suficientes datos en el rango pedido (sólo hay', nrow(d), 'filas) ')
+    }
+    return(d[order(-date)] %>% slice(slice_))
     
   } else if (ticker_ != '') {
     d <- dtb[ticker_, .(ticker, variable), nomatch = 0] %>% unique()
@@ -1341,7 +1352,7 @@ ver <- function(ticker_, variable_ = '', slice_ = 1:10) {
     }
     
   }  else if (variable_ != '') {
-    d <- dtb[.(unique(ticker_)), .(ticker, variable), nomatch = 0] %>% unique()
+    d <- dtb[.(unique(ticker), variable_), .(ticker, variable), nomatch = 0] %>% unique()
     if (nrow(d) == 0) {
       cat('No se encontró la variable "', 
           variable_, 
