@@ -818,7 +818,7 @@ armar_lista_args <- function(...){
 }
 
 calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c('percentil'), 
-                             p = NULL, ver_serie = FALSE){
+                             p = NULL, ND = -1, ver_serie = FALSE){
   
   # browser()  #####################################################
   
@@ -833,27 +833,70 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
   # Si estoy en el segundo paso de un crossover(), tengo que mirar el día anterior
   xovr_slide <- ifelse(get('paso_crossover', parent.frame(2)) == 2, 1, 0)
   
-  un_solo_dia <- (duracion == 0)
-  if (is.null(start)) start <- ifelse(un_solo_dia, 0, 1) + xovr_slide
-  
+  duracion_anclada <- FALSE
+  if (is.character(duracion)) {
+    duracion_anclada <- TRUE
+    
+    # 'Chicken and egg' situation: the value to use as default for
+    # 'start' depends on 'duracion', but if 'duracion' is specified as character
+    # I need 'start' to calculate it.
+    #   ==> for character 'duracion's, I use a default of 0 for 'start'
+    start <- ifelse(is.null(start), 0, start) + xovr_slide
+    
+    fecha_inicial <- (dias %>% filter(IxDia == start) %>% select(date))[[1]]
+    fecha_final <- devolver_fecha_de_duracion(str_to_lower(duracion), fecha_inicial, start)
+    un_solo_dia <- (fecha_final == fecha_inicial)
+  } else {
+    # "duracion = 0" doesn't make much sense. If I want a series of just two days,
+    # starting today, I would need "duracion = 2, start = 1". So a series of one 
+    # day, starting today should be "duracion = 2, start = 1". 
+    
+    # Because of the mistaken initial decision to make "duracion = 0" the default,
+    # and because even though it is wrong, it still seems intuitive, I allow it
+    # and I silently change it to 1 when I receive it as 0. 
+    if (duracion == 0) duracion = 1
+    
+    
+    un_solo_dia <- (duracion == 1)
+    if (is.null(start)) {
+      # Set default value if needed
+      start <- ifelse(un_solo_dia, 0, 1) + xovr_slide
+    } else {
+      start <- start + xovr_slide
+    }
+  }
   fecha_start <- (dias %>% filter(IxDia == start) %>% select(date))[[1]]
   
+
   # if (exists('usarDT') && usarDT) {
-  a <- dtb[.(ticker_, serie)]
-  if (is.na((a$date)[[1]])) browser()
-  
-  datos_uno <- a %>% 
-    filter(date <= fecha_start) %>% 
-    spread(variable, value, fill = NA) %>% 
-    filter(complete.cases(.)) %>% 
-    arrange(desc(date)) %>% 
-    slice(1:duracion) %>% 
-    tbl_df
+  if (!duracion_anclada) {
+    datos_uno <- dtb[.(ticker_, serie)] %>% 
+      filter(date <= fecha_start) %>% 
+      spread(variable, value, fill = NA) %>% 
+      filter(complete.cases(.)) %>% 
+      arrange(desc(date)) %>% 
+      slice(1:duracion) %>%                #    <<<-- 'duracion' selection of records
+      tbl_df
+
+  } else {
+    datos_uno <- dtb[.(ticker_, serie)] %>% 
+      filter(date <= fecha_start) %>% 
+      spread(variable, value, fill = NA) %>% 
+      filter(complete.cases(.)) %>% 
+      arrange(desc(date)) %>% 
+      filter(date >= fecha_final) %>%    #    <<<-- fixed date selection of records
+      tbl_df
+  }
   
   if(ver_serie) {
     # This is just for debugging
     print(datos_uno, n = nrow(datos_uno))
   }
+  
+  # if (post_proceso %in% c('ultimo', 'primero')) {
+  #   fecha_end <- (dias %>% filter(IxDia == start + duracion - 1) %>% select(date))[[1]]
+  #   datos_uno <- datos_uno %>% filter(date >= fecha_end)
+  # }
   
   if (nrow(datos_uno) == 0) {
     if (post_proceso %in% c('ultimo', 'primero')) {
@@ -924,7 +967,76 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
     stop('post_proceso: ', ticker_, ' desconocido.', call. = FALSE)
 }
 
-
+obtener_fecha <- function(duracion, fecha_inicial, start) {
+  durac_num <- str_replace_all(duracion, '[^0-9]', '')
+  durac_unid <- str_replace_all(duracion, '[^a-zA-Z_]', '') %>% str_replace('s', '')
+  
+  if (durac_unid == 'pnl_day') {
+    palabra_tiempo = 'días [pnl]'
+    unidad_tiempo <- 'day'
+    duracion_max <- 1000
+  } else if (durac_unid == 'day') {
+    palabra_tiempo = 'dias'
+    unidad_tiempo <- 'days'
+    duracion_max <- 1500
+  } else if (durac_unid == 'month') {
+    palabra_tiempo = 'meses'
+    unidad_tiempo <- 'months'
+    duracion_max <- 60
+  } else if (durac_unid == 'year') {
+    palabra_tiempo = 'años'
+    unidad_tiempo <- 'years'
+    duracion_max <- 5
+  }
+  
+  if (durac_num == '') durac_num <- 1
+  
+  try(duracion <- as.numeric(durac_num))
+  if (inherits(duracion, 'try-error') || inherits(duracion, 'error')) {
+    stop('duracion:', duracion, ' cantidad de ', palabra_tiempo, ' inválida.')
+  } else if (duracion < 1 || duracion > duracion_max) {
+    stop('duracion:', duracion, ' cantidad de ', palabra_tiempo, ' fuera de rango')
+  }
+  
+  if (durac_unid == 'pnl_day') {
+    fecha <- (dias %>% filter(IxDia == start + duracion - 1) %>% select(date))[[1]]
+  } else {
+    l <- list(durac_num)
+    names(l) <- unidad_tiempo
+    fecha <- fecha_inicial - do.call(period, l)
+  }
+  
+}
+  
+devolver_fecha_de_duracion <- function(duracion, fecha_inicial, start) {
+  a <- start
+  if (duracion == 'mtd') {
+    fecha_final <- floor_date(fecha_inicial, unit = 'month')
+    
+  } else if (duracion == 'ytd') {
+    fecha_final <- floor_date(fecha_inicial, unit = 'year')
+    
+  } else if (str_detect(duracion, 'pnl_day')) {
+    fecha_final <- obtener_fecha(duracion, fecha_inicial, start)
+    
+  } else if (str_detect(duracion, 'day|month|year')) {
+    fecha_final <- obtener_fecha(duracion, fecha_inicial, start) 
+    
+  } else if (str_detect(duracion, '^[0-3]?[0-9]{1}[/-][0-1]?[0-9]{1}[/-][0-9]{2,4}')) {
+    try(fecha_final <- dmy(duracion))
+    if (inherits(fecha_final, 'try-error') || inherits(fecha_final, 'error')) {
+      stop('duracion:', duracion, ' fecha inválida.')
+    } else if (fecha_final < dmy('1/1/2012')) {
+      stop('duracion:', duracion, ' fecha demasiado temprana')
+    } else if (fecha_final > fecha_base) {
+      stop('duracion:', duracion, ' > fecha_base')
+    }
+    
+  } else {
+    stop(duracion, ': duracion desconocida o inválida')
+  }
+  fecha_final
+}
 
 preparar_output <- function(res, archivo = NULL, silencioso = FALSE) {
   dic_alarmas <- 
