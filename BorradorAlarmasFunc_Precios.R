@@ -1325,14 +1325,34 @@ ver <- function(ticker_, variable_ = '', slice_ = 1:10) {
   
   if (ticker_ != '' && variable_ != ''){
     d <- dtb[.(ticker_, variable_)]
+    return(d[order(-date)][slice_, ])
     
   } else if (ticker_ != '') {
-    d <- dtb[.(ticker_)]
+    d <- dtb[ticker_, .(ticker, variable), nomatch = 0] %>% unique()
+    if (nrow(d) == 0) {
+      cat('No se encontró el ticker "', 
+                  ticker_, 
+                  '", valores posibles:\n', sep = '')
+      return(dtb %>% select(ticker) %>% 
+               filter(str_detect(str_to_lower(ticker), str_to_lower(ticker_))) 
+             %>% unique %>% arrange())
+    } else {
+      return(d)
+    }
     
   }  else if (variable_ != '') {
-    d <- dtb[.(unique(ticker_), variable_)]
+    d <- dtb[.(unique(ticker_)), .(ticker, variable), nomatch = 0] %>% unique()
+    if (nrow(d) == 0) {
+      cat('No se encontró la variable "', 
+          variable_, 
+          '", valores posibles:\n', sep = '')
+      return(dtb %>% select(variable) %>% 
+               filter(str_detect(str_to_lower(variable), str_to_lower(variable_)))
+             %>% unique %>% arrange())
+    } else {
+      return(d)
+    }
   }
-  d[order(-date)][slice_, ]
 }
 
 init_alarm_env <- function(){
