@@ -1321,7 +1321,7 @@ lista_Unicodes <- function(){
   sprintf("%s   -->   Unicode u%s", v, V)
 }
 
-see <- function(ticker_, variable_ = '', slice_ = 1:10) {
+ver <- function(ticker_, variable_ = '', slice_ = 1:10) {
   
   if (ticker_ != '' && variable_ != ''){
     d <- dtb[.(ticker_, variable_)]
