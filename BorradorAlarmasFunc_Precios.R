@@ -888,7 +888,7 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
       tbl_df
   }
   
-  if(ver_serie) {
+  if(ver_serie > get('paso_crossover', parent.frame(2))) {
     # This is just for debugging
     print(datos_uno, n = nrow(datos_uno))
   }
