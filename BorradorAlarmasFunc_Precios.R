@@ -92,7 +92,15 @@ corrida_alarmas <- function(filename, fecha_inicial = NULL, fecha_final = fecha_
     fechas <- seq(fecha_inicial, fecha_final, by = by)
     for (ix in seq_along(fechas)) {
       fecha_base <<- fechas[ix]
+      
+      
+
       if(!wday(fecha_base) %in% c(1, 7)) {
+        Ix_base <- (dias %>% filter(date == fecha_base) %>% select(IxDia))[[1]]
+        if (length(Ix_base) == 0){
+          print(paste('Sin datos para el día ', fecha_base))
+          next()
+        }
         ######################################################
         source(filename, print.eval = TRUE, encoding = 'utf-8')
         ######################################################
@@ -499,7 +507,18 @@ correr_alarma <- function(expr, importancia = 5, flias_1, flias_2 = flias_1,
                           flias_3 = flias_1, flias_4 = flias_2, tipo = '', 
                           mensaje_corto = '', mensaje = '', 
                           # parametros usados cuando se llama desde la funcion 'crossover'
-                          paso_crossover = 0){
+                          paso_crossover = 0,
+                          permanente = 0){
+  
+  if(any(str_detect(sapply(sys.calls(), function(x) as.character(x)[1]), 'corrida_alarmas'))) {
+    Ix_base <- dynGet('Ix_base')
+  } else {
+    Ix_base <- (dias %>% filter(date == fecha_base) %>% select(IxDia))[[1]]
+    if (length(Ix_base) == 0){
+      print(paste('Sin datos para el dìa ', fecha_base))
+      return()
+    }
+  }
   
   tipo <- str_replace_all(tipo, ',', ' ')
   mensaje_corto <- str_replace_all(mensaje_corto, ',', ' ')
@@ -821,7 +840,7 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
                              p = NULL, ND = -1, ver_serie = FALSE){
   
   # browser()  #####################################################
-  
+  Ix_base <- get('Ix_base', envir = parent.frame(2))
   ticker_ <- get('familia_target', envir = parent.frame())
   
   # serie_ <- lazyeval::as.lazy(serie) 
@@ -843,7 +862,7 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
     #   ==> for character 'duracion's, I use a default of 0 for 'start'
     start <- ifelse(is.null(start), 0, start) + xovr_slide
     
-    fecha_inicial <- (dias %>% filter(IxDia == start) %>% select(date))[[1]]
+    fecha_inicial <- (dias %>% filter(IxDia == Ix_base + start) %>% select(date))[[1]]
     fecha_final <- devolver_fecha_de_duracion(str_to_lower(duracion), fecha_inicial, start)
     un_solo_dia <- (fecha_final == fecha_inicial)
   } else {
@@ -865,7 +884,7 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
       start <- start + xovr_slide
     }
   }
-  fecha_start <- (dias %>% filter(IxDia == start) %>% select(date))[[1]]
+  fecha_start <- (dias %>% filter(IxDia == Ix_base + start) %>% select(date))[[1]]
   
 
   datos_uno <- dtb[.(ticker_, serie), nomatch = 0] %>% filter(date <= fecha_start)
@@ -1001,7 +1020,7 @@ obtener_fecha <- function(duracion, fecha_inicial, start) {
   }
   
   if (durac_unid == 'pnl_day') {
-    fecha <- (dias %>% filter(IxDia == start + duracion - 1) %>% select(date))[[1]]
+    fecha <- (dias %>% filter(IxDia == Ix_base + start + duracion - 1) %>% select(date))[[1]]
   } else {
     l <- list(durac_num)
     names(l) <- unidad_tiempo
@@ -1053,7 +1072,7 @@ preparar_output <- function(res, archivo = NULL, silencioso = FALSE) {
   res$mensaje <- str_replace(res$mensaje, 'Error: Falta', 'Falta')
   
   # In corrida_alarmas we can save last id used at the end, in all other cases save it here.
-  if(as.character(sys.calls()[[1]])[1] != 'corrida_alarmas') {
+  if(any(str_detect(sapply(sys.calls(), function(x) as.character(x)[1]), 'corrida_alarmas'))) {
     cat(res$id_alarma, file="id_alarmas_file.txt", sep = "\n")
   }
   
