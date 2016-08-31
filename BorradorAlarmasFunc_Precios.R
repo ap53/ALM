@@ -1,4 +1,6 @@
-### Funciones para BorradorAlarmas.R  v0.93
+### Funciones para BorradorAlarmas.R  v0.94
+
+#### Reemplazar dynGet()
 
 noExposureID <- c("Cash and Banks",
                   "Accounts Payable",
