@@ -1039,6 +1039,9 @@ devolver_fecha_de_duracion <- function(duracion, fecha_inicial, start) {
   } else if (duracion == 'ytd') {
     fecha_final <- floor_date(fecha_inicial, unit = 'year')
     
+  } else if (duracion == 'wtd') {
+    fecha_final <- floor_date(fecha_inicial, unit = 'week')
+    
   } else if (str_detect(duracion, 'pnl_day')) {
     fecha_final <- obtener_fecha(duracion, fecha_inicial, start)
     
