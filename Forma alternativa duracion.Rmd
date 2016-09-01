@@ -1,0 +1,105 @@
+---
+title: ''
+output:
+  html_notebook: default
+---
+
+## Forma alternativa de expresar una duración como valor alfanumérico  
+En lo que hemos visto hasta aquí, el parametro 'duracion' se ha expresado siempre como un valor numérico:  
+
+* En el caso de datos 'pnl', el número expresa la cantidad de 'dias pnl' que debe abarcar el período considerado, es decir excluyendo sábados y domingos.  
+Al estar ordenado 'pnl' por fechas descendientes y al excluir por diseño los días del fin de semana, para datos 'pnl' la duración coincide con la cantidad de registros para una variable dada.  
+  
+* Por extensión, cuando no de trata de datos 'pnl', el parametro 'duracion' representa **directamente** la cantidad de registros. Si un dato 'bloomberg' se publica mensualmente, por ejemplo el balance de 'AAPL', entonces "duracion = 3" significa 3 balances y por lo tanto 3 meses.  
+
+Hay situaciones en la que es necesario especificar duraciones de otra manera, por ejemplo:  
+
+* "Desde el principio del mes": habría que modificar duracion todos los días  
+
+* Un período calendario fijo: 2 meses. Para datos bloomberg, en el que podemos no tener una periodicidad bien definida, serìa poco confiable especificar la duración de la manera descripta.  
+
+* Una fecha determinada  
+
+En el módulo de Alarmas, estas situaciones se resuelven expresando el parámetro 'duracion' como un valor alfanumérico (string entre comillas).  
+
+## Especificación de la duración como valor alfanumérico  
+La especificación se divide en dos partes:  
+* tramo_1: permite fijar una fecha con respecto a la fecha_base, por ejemplo:  
+
+  + 'mtd' (month to date) es el primer día del mes  
+  
+  + 'month' es un mes calendario exacto para atrás  
+  
+  + '15/2/2015'  
+
+1  
+* Opcionalmente se puede especificar un tramo_2, que modifica la fecha del tramo_1:  
+
+  + Se escribe atrás de lo especificado para tramo_1, separándolo por el signo '-' (la modificación es *siempre* hacia 'atrás')  
+    
+  + Se escribe como un número y opcionalmente una letra.  
+  
+### tramo_1:  
+1  
+* Los valores que se pueden especificar son los siguientes:  
+
+  + 'wtd','mtd' o 'ytd' para obtemer el principio de la semana, mes o año respectivamente  
+
+  + 'day', 'week', 'month' o 'year' para restar un día, una semana, un mes o un año  
+
+  + Por default, los cuatro casos anteriores implican UNA unidad. Pero también se puede, opcionalmente, anteceder a la palabra un número para especificar otra cantidad. En este caso, las unidades se pueden especificar en plural o en singular sin afectar el resultado  
+
+  + 'dd/mm/[yy]yy' para una fecha fija. Es opcional el '0' cuando no hay dígito de decenas en días y meses, como también es opcional el '20' del siglo en la especificación del año  
+
+Ejemplos con únicamente tramo_1: 'wtd', '3 month', '3months', '15/8/16'
+  
+  
+### tramo_2:  
+
+Se usa cuando se desea "correr" la fecha obtenida mediante el tramo_1.  
+El caso típico para su uso es el del 'último día del mes anterior'. Podemos especificar claramente el primer día del mes actual, pero hasta aquí no hay manera de pedir el último día del mes anterior.  
+
+La solución para esta necesidad es más general que el uso descripto, y se pueden restar otras cosas que "un día":  
+* Están contemplados:  
+
+  + 'd' para días  
+    
+  + 'w' para semanas  
+    
+  + 'm' para meses  
+    
+  + 'y' para años  
+
+1  
+* De la misma manera que en tramo_1, se puede anteceder a la letra con un número para modificar la cantidad. Si no hay dígitos en tramo_2, se asume el valor 1.  
+
+* En caso de expresar solamente el número, por ejemplo 'mtd - 1', por default se asume que se trata de días.
+Son entonces exactamente equivalentes las tres expresiones que siguen:
+'mtd -1d', 'mtd-1' y 'mtd - d'    (Los espacios se ignoran)
+
+### Días "de la semana"
+El uso más frecuente en el módula de alarmas considera un calendario en el que se excluyen los fines de semana. Por este motivo, **por default**, las fechas obtenidas por la aplicación de las reglas anteriores, se modifican restándoles dos días si caen un domingo y un día si caen un sábado.  
+
+Por ejemplo, si la fecha actual es '15/8/2016', dado que el '1/8/2016' es un lunes, con 'mtd -1' obtendremos `r format(devolver_fecha_de_duracion('mtd -1', dmy('15/8/2016'), 0), '%d/%m/%y')`, y no '31/7/2016'.  
+
+Si bien este es el comportamiento más útil en Alarmas, pueden existir casos en los que NO se quiera evitar los fines de semana. La forma de lograr esto es poner la especificación de tramo_2 en mayúsculas. Con 'mtd -1D' se obtiene `r format(devolver_fecha_de_duracion('mtd -1D', dmy('15/8/2016'), 0), '%d/%m/%y')`.  
+  
+Para los casos en los que se necesite especificar solamente el tramo_1, pero se quiera mantener el día obtenido sin 'salir' del fin de semana, hay que agregar un tramo_2 de '0D'.
+Dado que el '14/8/16' cae domingo, si especificamos sólo esta fecha obtenemos `r format(devolver_fecha_de_duracion('14/8/16', dmy('15/8/2016'), 0), '%d/%m/%y')`, pero si especificamos '14/8/16 -0 D', el resultado es `r format(devolver_fecha_de_duracion('14/8/16 - 0 D', dmy('15/8/2016'), 0), '%d/%m/%y')`.  
+
+## Ejemplos varios:  
+Suponiendo una fecha_base = '15/8/2016' que cae un lunes:  
+'wtd'       `r format(devolver_fecha_de_duracion('wtd', dmy('15/8/2016'), 0), '%d/%m/%y')`  es el mismo lunes  
+
+'wtd-1'     `r format(devolver_fecha_de_duracion('wtd-1', dmy('15/8/2016'), 0), '%d/%m/%y')`  el 14 es domingo, me voy al lunes  
+
+'wtd-D'     `r format(devolver_fecha_de_duracion('wtd-D', dmy('15/8/2016'), 0), '%d/%m/%y')`  para quedarme en el domingo, le pongo una especificación en mayúscula  
+
+'month'     `r format(devolver_fecha_de_duracion('month', dmy('15/8/2016'), 0), '%d/%m/%y')`  un mes calendario  
+
+'2 months'  `r format(devolver_fecha_de_duracion('2 months', dmy('15/8/2016'), 0), '%d/%m/%y')`  dos meses  
+
+'2 month-3' `r format(devolver_fecha_de_duracion('2 month-3', dmy('15/8/2016'), 0), '%d/%m/%y')`  lo puedo correr una cantidad arbitraria de días  
+
+
+
