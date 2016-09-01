@@ -1,7 +1,5 @@
 ### Funciones para BorradorAlarmas.R  v0.94
 
-#### Reemplazar dynGet()
-
 noExposureID <- c("Cash and Banks",
                   "Accounts Payable",
                   "Sales - Pending Settlement",
@@ -512,9 +510,18 @@ correr_alarma <- function(expr, importancia = 5, flias_1, flias_2 = flias_1,
                           paso_crossover = 0,
                           permanente = 0){
   
+  # If called from corrida_alarmas, Ix_base already exists, but the actual calls
+  # to this function will be made via source(). As the calculation of Ix_base is
+  # slow, I get() it from corrida_alarmas() in a convoluted way because of the
+  # source() calls...
   if(any(str_detect(sapply(sys.calls(), function(x) as.character(x)[1]), 'corrida_alarmas'))) {
-    Ix_base <- dynGet('Ix_base')
+    Ix_base <- get('Ix_base', 
+                   sys.frame(which(str_detect(
+                     sapply(sys.calls(), 
+                            function(x) as.character(x)[1]), 'corrida_alarmas'))))
+
   } else {
+    # If not invoked via corrida_alarmas(), calculate it here...
     Ix_base <- (dias %>% filter(date == fecha_base) %>% select(IxDia))[[1]]
     if (length(Ix_base) == 0){
       print(paste('Sin datos para el dìa ', fecha_base))
@@ -847,6 +854,10 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
   
   # serie_ <- lazyeval::as.lazy(serie) 
   
+  if (duracion > 1 && post_proceso == 'percentil' && is.null(p)) {
+      stop('Falta especificar el post_proceso (o tal vez el percentil)', call. = FALSE)
+  }
+  
   if (str_detect(serie, '_Ovr_')) {
     ticker_ <- paste(ticker_, '|', ticker_)
   }
@@ -990,7 +1001,7 @@ calcular_termino <- function(serie, duracion = 0, start = NULL, post_proceso = c
     stop('post_proceso: ', ticker_, ' desconocido.', call. = FALSE)
 }
 
-obtener_fecha <- function(duracion, fecha_inicial, start) {
+obtener_fecha <- function(duracion, fecha_inicial, start, Ix_base) {
   durac_num <- str_replace_all(duracion, '[^0-9]', '')
   durac_unid <- str_replace_all(duracion, '[^a-zA-Z_]', '') %>% str_replace('s', '')
   
@@ -1031,36 +1042,82 @@ obtener_fecha <- function(duracion, fecha_inicial, start) {
   
 }
   
+procesar_to_date <- function(duracion, fecha_inicial) {
+  
+  tramo_1 <- str_sub(duracion, 1, 1)
+  fecha_final <- floor_date(fecha_inicial, 
+                            unit = switch(tramo_1, 
+                                          m = 'month',
+                                          w = 'week',
+                                          y = 'year') )
+  # Lubridate weeks start on sundays...
+  if (tramo_1 == 'w' && wday(fecha_final) == 1) fecha_final <- fecha_final + days(1)
+  
+  fecha_final
+}
+
 devolver_fecha_de_duracion <- function(duracion, fecha_inicial, start) {
-  a <- start
-  if (duracion == 'mtd') {
-    fecha_final <- floor_date(fecha_inicial, unit = 'month')
+  tramos <- str_split(duracion, '-')
+  tramos <-  str_trim(tramos[[1]])
+  if (length(tramos) > 2 || length(tramos) == 0) {
+    stop('Especificacion de duracion inválida: ', duracion)
+  }
+  
+  tramo_1 <- tramos[1]
+  if (str_detect(tramo_1, '^[wmy]td')) {
+    fecha_final <- procesar_to_date(str_sub(tramos[1], 1, 1), fecha_inicial)
+  } else if (str_detect(tramo_1, 'pnl_day')) {
+    fecha_final <- obtener_fecha(tramo_1, fecha_inicial, start, Ix_base)
     
-  } else if (duracion == 'ytd') {
-    fecha_final <- floor_date(fecha_inicial, unit = 'year')
+  } else if (str_detect(tramo_1, 'day|month|year')) {
+    fecha_final <- obtener_fecha(tramo_1, fecha_inicial, start, Ix_base) 
     
-  } else if (duracion == 'wtd') {
-    fecha_final <- floor_date(fecha_inicial, unit = 'week')
-    
-  } else if (str_detect(duracion, 'pnl_day')) {
-    fecha_final <- obtener_fecha(duracion, fecha_inicial, start)
-    
-  } else if (str_detect(duracion, 'day|month|year')) {
-    fecha_final <- obtener_fecha(duracion, fecha_inicial, start) 
-    
-  } else if (str_detect(duracion, '^[0-3]?[0-9]{1}[/-][0-1]?[0-9]{1}[/-][0-9]{2,4}')) {
-    try(fecha_final <- dmy(duracion))
+  } else if (str_detect(tramo_1, '^[0-3]?[0-9]{1}[/-][0-1]?[0-9]{1}[/-][0-9]{2,4}')) {
+    try(fecha_final <- dmy(tramo_1))
     if (inherits(fecha_final, 'try-error') || inherits(fecha_final, 'error')) {
-      stop('duracion:', duracion, ' fecha inválida.')
+      stop('duracion:', tramo_1, ' fecha inválida.')
     } else if (fecha_final < dmy('1/1/2012')) {
-      stop('duracion:', duracion, ' fecha demasiado temprana')
+      stop('duracion:', tramo_1, ' fecha demasiado temprana')
     } else if (fecha_final > fecha_base) {
-      stop('duracion:', duracion, ' > fecha_base')
+      stop('duracion:', tramo_1, ' > fecha_base')
     }
     
   } else {
-    stop(duracion, ': duracion desconocida o inválida')
+    stop(tramo_1, ': duracion desconocida o inválida')
   }
+  
+  dias_pnl <- TRUE
+  
+  if (length(tramos) > 1) {
+    atras_num <- as.numeric(str_replace_all(tramos[2], '[^0-9]', ''))
+    if (is.na(atras_num)) atras_num <- 1
+    
+    atras_unid <- str_replace_all(tramos[2], '[^a-zA-Z_]', '') %>% str_replace('s', '')
+    if (atras_unid == '') atras_unid <- 'd'
+    
+    
+    if (atras_unid != str_to_lower(atras_unid)) {
+      dias_pnl <- FALSE
+      atras_unid <- str_to_lower(atras_unid)
+    }
+    
+    try(fecha_final <- fecha_final - 
+          do.call(switch(atras_unid, d = 'days', m = 'months', w = 'weeks', y = 'years'),
+                  list(atras_num))
+    )
+    
+    if (is.na(fecha_final)) 
+      stop('"', duracion, '": especificación de duración inválida', call. = FALSE)
+    
+  }
+  
+  if (dias_pnl) {
+    if(wday(fecha_final) %in% c(1, 7))
+      fecha_final <- fecha_final - days(1)
+    if(wday(fecha_final) %in% c(1, 7))
+      fecha_final <- fecha_final - days(1)
+  }
+  
   fecha_final
 }
 
